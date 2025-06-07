@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/go-chi/chi/v5"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -45,7 +46,10 @@ func PostHandler(w http.ResponseWriter, r *http.Request) {
 	shortURL := fmt.Sprintf("%s%s/%s", flagRunAddr, flagRunPort, id)
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusCreated)
-	w.Write([]byte(shortURL))
+	_, err = w.Write([]byte(shortURL))
+	if err != nil {
+		log.Println(err)
+	}
 
 }
 
@@ -60,7 +64,10 @@ func GetHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(originalURL))
+	_, err := w.Write([]byte(originalURL))
+	if err != nil {
+		log.Println(err)
+	}
 
 }
 
