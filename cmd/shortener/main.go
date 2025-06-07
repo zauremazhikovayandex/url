@@ -43,7 +43,7 @@ func PostHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	shortURL := fmt.Sprintf("%s%s/%s", flagRunAddr, flagRunPort, id)
+	shortURL := fmt.Sprintf("%s/%s", baseURL, id)
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusCreated)
 	_, err = w.Write([]byte(shortURL))
@@ -79,13 +79,36 @@ func Router() chi.Router {
 	return r
 }
 
-var flagRunPort string
-var flagRunAddr string
+var (
+	serverAddr string
+	baseURL    string
+)
 
 func parseFlags() {
-	flag.StringVar(&flagRunPort, "a", ":8080", "port to run server")
-	flag.StringVar(&flagRunAddr, "b", "http://localhost", "address to run server")
+	defaultServerAddr := ":8080"
+	defaultBaseURL := "http://localhost:8080"
+
+	// флаги
+	flag.StringVar(&serverAddr, "a", "", "port to run server")
+	flag.StringVar(&baseURL, "b", "", "base URL for short links")
 	flag.Parse()
+
+	// ENV переменные
+	envAddr := os.Getenv("SERVER_ADDRESS")
+	envBase := os.Getenv("BASE_URL")
+
+	// приоритет: env > флаг > default
+	if envAddr != "" {
+		serverAddr = envAddr
+	} else if serverAddr == "" {
+		serverAddr = defaultServerAddr
+	}
+
+	if envBase != "" {
+		baseURL = envBase
+	} else if baseURL == "" {
+		baseURL = defaultBaseURL
+	}
 }
 
 func main() {
@@ -97,6 +120,6 @@ func main() {
 }
 
 func run() error {
-	fmt.Println("Running server on", flagRunPort)
-	return http.ListenAndServe(flagRunPort, Router())
+	fmt.Println("Running server on", serverAddr)
+	return http.ListenAndServe(serverAddr, Router())
 }
