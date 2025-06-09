@@ -85,30 +85,10 @@ var (
 )
 
 func parseFlags() {
-	defaultServerAddr := ":8080"
-	defaultBaseURL := "http://localhost:8080"
-
 	// флаги
-	flag.StringVar(&serverAddr, "a", "", "port to run server")
-	flag.StringVar(&baseURL, "b", "", "base URL for short links")
+	flag.StringVar(&serverAddr, "a", ":8080", "port to run server")
+	flag.StringVar(&baseURL, "b", "http://localhost:8080", "base URL for short links")
 	flag.Parse()
-
-	// ENV переменные
-	envAddr := os.Getenv("SERVER_ADDRESS")
-	envBase := os.Getenv("BASE_URL")
-
-	// приоритет: env > флаг > default
-	if envAddr != "" {
-		serverAddr = envAddr
-	} else if serverAddr == "" {
-		serverAddr = defaultServerAddr
-	}
-
-	if envBase != "" {
-		baseURL = envBase
-	} else if baseURL == "" {
-		baseURL = defaultBaseURL
-	}
 }
 
 func main() {
