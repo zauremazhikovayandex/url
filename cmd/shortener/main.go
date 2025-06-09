@@ -61,14 +61,12 @@ func GetHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	originalURL := os.Getenv(id)
-
-	w.Header().Set("Content-Type", "text/plain")
-	w.WriteHeader(http.StatusOK)
-	_, err := w.Write([]byte(originalURL))
-	if err != nil {
-		log.Println(err)
+	if originalURL == "" {
+		http.Error(w, "URL not found", http.StatusBadRequest)
+		return
 	}
 
+	http.Redirect(w, r, originalURL, http.StatusTemporaryRedirect)
 }
 
 func Router() chi.Router {
