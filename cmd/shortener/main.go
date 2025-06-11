@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
+	"github.com/go-chi/chi/v5"
 	"io"
 	"log"
 	"net/http"
@@ -21,21 +22,17 @@ func generateShortID(n int) (string, error) {
 }
 
 func PostHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost || !strings.HasPrefix(r.Header.Get("Content-Type"), "text/plain") {
-		http.Error(w, "Bad Request", http.StatusBadRequest)
-		return
-	}
 
 	body, err := io.ReadAll(r.Body)
 	if err != nil || len(body) == 0 {
-		http.Error(w, "Bad Request", http.StatusBadRequest)
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
-	originalURL := strings.TrimSpace(string(body))
 
+	originalURL := strings.TrimSpace(string(body))
 	id, err := generateShortID(8)
-	if err != nil {
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	if err != nil || len(body) == 0 {
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 
@@ -45,44 +42,53 @@ func PostHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	shortURL := fmt.Sprintf("http://localhost:8080/%s", id)
+	shortURL := fmt.Sprintf("%s/%s", baseURL, id)
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusCreated)
-	_, _ = w.Write([]byte(shortURL))
+	_, err = w.Write([]byte(shortURL))
+	if err != nil {
+		log.Println(err)
+	}
+
 }
 
 func GetHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Bad Request", http.StatusBadRequest)
-		return
-	}
-
-	id := strings.TrimPrefix(r.URL.Path, "/")
+	id := chi.URLParam(r, "id")
 	if id == "" {
-		http.Error(w, "Bad Request", http.StatusBadRequest)
+		http.Error(w, "Missing ID", http.StatusBadRequest)
 		return
 	}
 
 	originalURL := os.Getenv(id)
 	if originalURL == "" {
-		http.Error(w, "URL not found", http.StatusNotFound)
+		http.Error(w, "URL not found", http.StatusBadRequest)
 		return
 	}
 
 	http.Redirect(w, r, originalURL, http.StatusTemporaryRedirect)
 }
 
-func main() {
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost {
-			PostHandler(w, r)
-		} else if r.Method == http.MethodGet && r.URL.Path != "/" {
-			GetHandler(w, r)
-		} else {
-			http.Error(w, "Bad Request", http.StatusBadRequest)
-		}
-	})
+func Router() chi.Router {
+	r := chi.NewRouter()
 
-	log.Println("Server started on http://localhost:8080")
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	r.Post("/", PostHandler)
+	r.Get("/{id}", GetHandler)
+	return r
+}
+
+var (
+	serverAddr = ":8080"
+	baseURL    = "http://localhost:8080"
+)
+
+func main() {
+
+	if err := run(); err != nil {
+		panic(err)
+	}
+}
+
+func run() error {
+	fmt.Println("Running server on", serverAddr)
+	return http.ListenAndServe(serverAddr, Router())
 }
