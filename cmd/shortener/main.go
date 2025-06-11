@@ -21,7 +21,7 @@ func generateShortID(n int) (string, error) {
 }
 
 func PostHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost || r.Header.Get("Content-Type") != "text/plain" {
+	if r.Method != http.MethodPost || !strings.HasPrefix(r.Header.Get("Content-Type"), "text/plain") {
 		http.Error(w, "Bad Request", http.StatusBadRequest)
 		return
 	}
@@ -65,7 +65,7 @@ func GetHandler(w http.ResponseWriter, r *http.Request) {
 
 	originalURL := os.Getenv(id)
 	if originalURL == "" {
-		http.Error(w, "URL not found", http.StatusBadRequest)
+		http.Error(w, "URL not found", http.StatusNotFound)
 		return
 	}
 
