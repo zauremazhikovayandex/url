@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/go-resty/resty/v2"
 	"github.com/stretchr/testify/assert"
+	"github.com/zauremazhikovayandex/url/cmd/config"
 	"log"
 	"net/http"
 	"net/http/httptest"
@@ -30,8 +31,13 @@ func TestWebhook(t *testing.T) {
 			expectedCode: http.StatusCreated,
 		},
 	}
+	config.AppConfig = &config.Config{
+		ServerAddr: ":8080",
+		BaseURL:    "http://localhost:8080",
+	}
 
 	srv := httptest.NewServer(Router())
+	bURL := srv.URL
 	defer srv.Close()
 
 	shortIDToOriginal := make(map[string]string)
@@ -41,7 +47,7 @@ func TestWebhook(t *testing.T) {
 			SetBody(tc.body).
 			SetHeader("Content-Type", "text/plain")
 
-		resp, err := req.Post(srv.URL)
+		resp, err := req.Post(bURL)
 
 		assert.NoError(t, err, "error making HTTP request")
 		assert.Equal(t, tc.expectedCode, resp.StatusCode(), "Response code didn't match expected")
@@ -57,7 +63,7 @@ func TestWebhook(t *testing.T) {
 	for id := range shortIDToOriginal {
 		req := resty.New().R().
 			SetHeader("Content-Type", "text/plain")
-		resp, err := req.Get(srv.URL + "/" + id)
+		resp, err := req.Get(bURL + "/" + id)
 
 		assert.NoError(t, err, "error making HTTP request")
 		assert.Equal(t, http.StatusOK, resp.StatusCode(), "Response code didn't match expected")
