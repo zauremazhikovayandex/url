@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"github.com/go-chi/chi/v5"
+	"github.com/zauremazhikovayandex/url/cmd/config"
 	"io"
 	"log"
 	"net/http"
@@ -42,7 +43,7 @@ func PostHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	shortURL := fmt.Sprintf("%s/%s", baseURL, id)
+	shortURL := fmt.Sprintf("%s/%s", config.AppConfig.BaseURL, id)
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusCreated)
 	_, err = w.Write([]byte(shortURL))
@@ -76,19 +77,15 @@ func Router() chi.Router {
 	return r
 }
 
-var (
-	serverAddr = ":8080"
-	baseURL    = "http://localhost:8080"
-)
-
 func main() {
-
 	if err := run(); err != nil {
 		panic(err)
 	}
 }
 
 func run() error {
-	fmt.Println("Running server on", serverAddr)
-	return http.ListenAndServe(serverAddr, Router())
+	config.InitConfig()
+
+	fmt.Println("Running server on", config.AppConfig.ServerAddr)
+	return http.ListenAndServe(config.AppConfig.ServerAddr, Router())
 }
