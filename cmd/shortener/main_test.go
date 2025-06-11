@@ -54,7 +54,7 @@ func TestWebhook(t *testing.T) {
 	}
 	log.Println(shortIDToOriginal)
 
-	for id, _ := range shortIDToOriginal {
+	for id := range shortIDToOriginal {
 		req := resty.New().R().
 			SetHeader("Content-Type", "text/plain")
 		resp, err := req.Get(srv.URL + "/" + id)
