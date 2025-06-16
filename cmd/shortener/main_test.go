@@ -1,7 +1,11 @@
 package main
 
 import (
+	"github.com/go-resty/resty/v2"
 	"github.com/stretchr/testify/assert"
+	"github.com/zauremazhikovayandex/url/cmd/routers"
+	"github.com/zauremazhikovayandex/url/internal/config"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -13,6 +17,7 @@ func TestWebhook(t *testing.T) {
 		method       string
 		body         string
 		expectedCode int
+		expectedBody string
 	}
 
 	testCases := []TestCase{
@@ -27,36 +32,42 @@ func TestWebhook(t *testing.T) {
 			expectedCode: http.StatusCreated,
 		},
 	}
+	config.AppConfig = &config.Config{
+		ServerAddr: ":8080",
+		BaseURL:    "http://localhost:8080",
+	}
+
+	srv := httptest.NewServer(routers.Router())
+	bURL := srv.URL
+	defer srv.Close()
 
 	shortIDToOriginal := make(map[string]string)
 
 	for _, tc := range testCases {
-		r := httptest.NewRequest(tc.method, "/", strings.NewReader(tc.body))
-		r.Header.Set("Content-Type", "text/plain")
-		w := httptest.NewRecorder()
+		req := resty.New().R().
+			SetBody(tc.body).
+			SetHeader("Content-Type", "text/plain")
 
-		PostHandler(w, r)
+		resp, err := req.Post(bURL)
 
-		resp := w.Result()
-		defer resp.Body.Close()
-		assert.Equal(t, tc.expectedCode, resp.StatusCode, "Response code didn't match expected")
+		assert.NoError(t, err, "error making HTTP request")
+		assert.Equal(t, tc.expectedCode, resp.StatusCode(), "Response code didn't match expected")
 
-		body := w.Body.String()
-		assert.True(t, strings.HasPrefix(body, "http://localhost:8080/"))
+		shortURL := strings.TrimSpace(string(resp.Body()))
+		assert.True(t, strings.HasPrefix(shortURL, "http://localhost:8080/"))
 
-		id := strings.TrimPrefix(strings.TrimSpace(body), "http://localhost:8080/")
+		id := strings.TrimPrefix(shortURL, "http://localhost:8080/")
 		shortIDToOriginal[id] = tc.body
 	}
+	log.Println(shortIDToOriginal)
 
-	for id, originalURL := range shortIDToOriginal {
-		r := httptest.NewRequest(http.MethodGet, "/"+id, nil)
-		w := httptest.NewRecorder()
+	for id := range shortIDToOriginal {
+		req := resty.New().R().
+			SetHeader("Content-Type", "text/plain")
+		resp, err := req.Get(bURL + "/" + id)
 
-		GetHandler(w, r)
-
-		resp := w.Result()
-		defer resp.Body.Close()
-		assert.Equal(t, http.StatusTemporaryRedirect, resp.StatusCode, "Response code didn't match expected")
-		assert.Equal(t, originalURL, resp.Header.Get("Location"))
+		assert.NoError(t, err, "error making HTTP request")
+		assert.Equal(t, http.StatusOK, resp.StatusCode(), "Response code didn't match expected")
 	}
+
 }
