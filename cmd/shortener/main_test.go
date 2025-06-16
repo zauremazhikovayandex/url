@@ -1,1 +1,1 @@
-package shortener
+package main
