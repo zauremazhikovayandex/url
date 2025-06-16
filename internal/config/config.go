@@ -1,6 +1,9 @@
 package config
 
-import "flag"
+import (
+	"flag"
+	"os"
+)
 
 var AppConfig *Config
 
@@ -18,8 +21,20 @@ func initURL() (string, string) {
 	flag.StringVar(&baseURL, "b", "", "base URL for short links")
 	flag.Parse()
 
+	// ENV переменные
+	envAddr := os.Getenv("SERVER_ADDRESS")
+	envBase := os.Getenv("BASE_URL")
+
+	// приоритет: env > флаг > default
+	if envAddr != "" {
+		serverAddr = envAddr
+	}
 	if serverAddr == "" {
 		serverAddr = defaultServerAddr
+	}
+
+	if envBase != "" {
+		baseURL = envBase
 	}
 	if baseURL == "" {
 		baseURL = defaultBaseURL
