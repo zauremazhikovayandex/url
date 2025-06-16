@@ -38,6 +38,7 @@ func TestWebhook(t *testing.T) {
 		PostHandler(w, r)
 
 		resp := w.Result()
+		defer resp.Body.Close()
 		assert.Equal(t, tc.expectedCode, resp.StatusCode, "Response code didn't match expected")
 
 		body := w.Body.String()
@@ -54,6 +55,7 @@ func TestWebhook(t *testing.T) {
 		GetHandler(w, r)
 
 		resp := w.Result()
+		defer resp.Body.Close()
 		assert.Equal(t, http.StatusTemporaryRedirect, resp.StatusCode, "Response code didn't match expected")
 		assert.Equal(t, originalURL, resp.Header.Get("Location"))
 	}
