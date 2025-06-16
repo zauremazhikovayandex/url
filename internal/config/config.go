@@ -11,11 +11,19 @@ type Config struct {
 
 func initURL() (string, string) {
 	serverAddr, baseURL := "", ""
+	defaultServerAddr, defaultBaseURL := ":8080", "http://localhost:8080"
 
 	// флаги
 	flag.StringVar(&serverAddr, "a", "", "port to run server")
 	flag.StringVar(&baseURL, "b", "", "base URL for short links")
 	flag.Parse()
+
+	if serverAddr == "" {
+		serverAddr = defaultServerAddr
+	}
+	if baseURL == "" {
+		baseURL = defaultBaseURL
+	}
 
 	return serverAddr, baseURL
 }
