@@ -1,5 +1,7 @@
 package config
 
+import "flag"
+
 var AppConfig *Config
 
 type Config struct {
@@ -8,7 +10,13 @@ type Config struct {
 }
 
 func initURL() (string, string) {
-	serverAddr, baseURL := ":8080", "http://localhost:8080"
+	serverAddr, baseURL := "", ""
+
+	// флаги
+	flag.StringVar(&serverAddr, "a", "", "port to run server")
+	flag.StringVar(&baseURL, "b", "", "base URL for short links")
+	flag.Parse()
+
 	return serverAddr, baseURL
 }
 
