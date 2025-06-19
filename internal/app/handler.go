@@ -10,6 +10,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"strings"
 )
 
@@ -22,6 +23,14 @@ func generateShortID(n int) (string, error) {
 	return base64.URLEncoding.EncodeToString(b)[:n], nil
 }
 
+func isValidURL(rawURL string) bool {
+	parsed, err := url.ParseRequestURI(rawURL)
+	if err != nil {
+		return false
+	}
+	return parsed.Scheme == "http" || parsed.Scheme == "https"
+}
+
 func PostHandler(w http.ResponseWriter, r *http.Request) {
 
 	body, err := io.ReadAll(r.Body)
@@ -31,6 +40,12 @@ func PostHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	originalURL := strings.TrimSpace(string(body))
+
+	if !isValidURL(originalURL) {
+		http.Error(w, "Invalid URL format", http.StatusBadRequest)
+		return
+	}
+
 	id, err := generateShortID(8)
 	if err != nil || id == "" {
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
