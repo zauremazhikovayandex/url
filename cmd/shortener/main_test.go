@@ -3,8 +3,9 @@ package main
 import (
 	"github.com/go-resty/resty/v2"
 	"github.com/stretchr/testify/assert"
-	"github.com/zauremazhikovayandex/url/cmd/routers"
+	"github.com/zauremazhikovayandex/url/internal/app"
 	"github.com/zauremazhikovayandex/url/internal/config"
+	"github.com/zauremazhikovayandex/url/internal/db/storage"
 	"log"
 	"net/http"
 	"net/http/httptest"
@@ -32,12 +33,10 @@ func TestWebhook(t *testing.T) {
 			expectedCode: http.StatusCreated,
 		},
 	}
-	config.AppConfig = &config.Config{
-		ServerAddr: ":8080",
-		BaseURL:    "http://localhost:8080",
-	}
+	config.InitConfig()
+	storage.InitStorage()
 
-	srv := httptest.NewServer(routers.Router())
+	srv := httptest.NewServer(app.Router())
 	bURL := srv.URL
 	defer srv.Close()
 
