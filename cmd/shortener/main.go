@@ -5,6 +5,7 @@ import (
 	"github.com/zauremazhikovayandex/url/internal/app"
 	"github.com/zauremazhikovayandex/url/internal/config"
 	"github.com/zauremazhikovayandex/url/internal/db/storage"
+	"github.com/zauremazhikovayandex/url/internal/logger"
 	"net/http"
 )
 
@@ -17,6 +18,7 @@ func main() {
 func run() error {
 	config.InitConfig()
 	storage.InitStorage()
+	logger.New("info")
 
 	fmt.Println("Running server on", config.AppConfig.ServerAddr)
 	return http.ListenAndServe(config.AppConfig.ServerAddr, app.Router())
