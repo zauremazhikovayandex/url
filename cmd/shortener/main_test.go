@@ -6,6 +6,7 @@ import (
 	"github.com/zauremazhikovayandex/url/internal/app"
 	"github.com/zauremazhikovayandex/url/internal/config"
 	"github.com/zauremazhikovayandex/url/internal/db/storage"
+	"github.com/zauremazhikovayandex/url/internal/logger"
 	"log"
 	"net/http"
 	"net/http/httptest"
@@ -35,6 +36,7 @@ func TestWebhook(t *testing.T) {
 	}
 	config.InitConfig()
 	storage.InitStorage()
+	logger.New("info")
 
 	srv := httptest.NewServer(app.Router())
 	bURL := srv.URL
