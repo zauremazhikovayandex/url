@@ -54,25 +54,18 @@ func MakeStdoutLogger(level string) *StdoutDriver {
 	switch level {
 	case message.TraceLevel:
 		lev = logrus.TraceLevel
-		break
 	case message.DebugLevel:
 		lev = logrus.DebugLevel
-		break
 	case message.InfoLevel:
 		lev = logrus.InfoLevel
-		break
 	case message.WarnLevel:
 		lev = logrus.WarnLevel
-		break
 	case message.ErrorLevel:
 		lev = logrus.ErrorLevel
-		break
 	case message.FatalLevel:
 		lev = logrus.FatalLevel
-		break
 	case message.PanicLevel:
 		lev = logrus.PanicLevel
-		break
 	default:
 		lev = logrus.WarnLevel
 	}
