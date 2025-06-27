@@ -3,6 +3,7 @@ package app
 import (
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"github.com/go-chi/chi/v5"
 	"github.com/zauremazhikovayandex/url/internal/config"
@@ -70,6 +71,61 @@ func PostHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	logger.Logging.WriteToLog(timeStart, originalURL, "POST", http.StatusCreated, shortURL)
 
+}
+
+func PostShortenHandler(w http.ResponseWriter, r *http.Request) {
+	timeStart := time.Now()
+
+	// Структура для чтения входного JSON
+	type RequestPayload struct {
+		URL string `json:"url"`
+	}
+
+	// Структура для ответа
+	type ResponsePayload struct {
+		Result string `json:"result"`
+	}
+
+	var payload RequestPayload
+
+	// Проверка Content-Type
+	if r.Header.Get("Content-Type") != "application/json" {
+		http.Error(w, "Content-Type must be application/json", http.StatusBadRequest)
+		logger.Logging.WriteToLog(timeStart, "", "POST", http.StatusBadRequest, "Invalid Content-Type")
+		return
+	}
+
+	// Декодирование JSON-запроса
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil || payload.URL == "" {
+		http.Error(w, "Invalid JSON payload", http.StatusBadRequest)
+		logger.Logging.WriteToLog(timeStart, "", "POST", http.StatusBadRequest, "Invalid JSON payload")
+		return
+	}
+
+	originalURL := strings.TrimSpace(payload.URL)
+	if !isValidURL(originalURL) {
+		http.Error(w, "Invalid URL format", http.StatusBadRequest)
+		logger.Logging.WriteToLog(timeStart, originalURL, "POST", http.StatusBadRequest, "Invalid URL format")
+		return
+	}
+
+	id, err := generateShortID(8)
+	if err != nil || id == "" {
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		logger.Logging.WriteToLog(timeStart, originalURL, "POST", http.StatusInternalServerError, "Failed to generate short ID")
+		return
+	}
+
+	storage.Store.Set(id, originalURL)
+
+	shortURL := fmt.Sprintf("%s/%s", config.AppConfig.BaseURL, id)
+
+	// Отправка JSON-ответа
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(ResponsePayload{Result: shortURL})
+
+	logger.Logging.WriteToLog(timeStart, originalURL, "POST", http.StatusCreated, shortURL)
 }
 
 func GetHandler(w http.ResponseWriter, r *http.Request) {
