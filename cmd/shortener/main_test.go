@@ -1,9 +1,12 @@
 package main
 
 import (
+	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"github.com/go-resty/resty/v2"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/zauremazhikovayandex/url/internal/app"
 	"github.com/zauremazhikovayandex/url/internal/config"
 	"github.com/zauremazhikovayandex/url/internal/db/storage"
@@ -110,4 +113,70 @@ func TestWebhook(t *testing.T) {
 		assert.Equal(t, http.StatusOK, resp.StatusCode(), "Response code didn't match expected")
 	}
 
+}
+
+func TestGzipCompression(t *testing.T) {
+	// Запускаем сервер с middleware
+	srv := httptest.NewServer(app.Router())
+	defer srv.Close()
+
+	type RequestPayload struct {
+		URL string `json:"url"`
+	}
+
+	urlToTest := "https://example.com"
+	reqPayload := RequestPayload{URL: urlToTest}
+	reqJSON, err := json.Marshal(reqPayload)
+	require.NoError(t, err)
+
+	t.Run("sends_gzip", func(t *testing.T) {
+		// Сжимаем тело запроса
+		var buf bytes.Buffer
+		zw := gzip.NewWriter(&buf)
+		_, err := zw.Write(reqJSON)
+		require.NoError(t, err)
+		require.NoError(t, zw.Close())
+
+		// Создаём запрос с Content-Encoding: gzip
+		req := httptest.NewRequest(http.MethodPost, srv.URL+"/api/shorten", &buf)
+		req.RequestURI = ""
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Content-Encoding", "gzip")
+
+		resp, err := http.DefaultClient.Do(req)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusCreated, resp.StatusCode)
+		defer resp.Body.Close()
+
+		var result map[string]string
+		err = json.NewDecoder(resp.Body).Decode(&result)
+		require.NoError(t, err)
+		assert.Contains(t, result["result"], "http://localhost:8080/")
+	})
+
+	t.Run("accepts_gzip", func(t *testing.T) {
+		// Обычное тело, но клиент хочет сжатый ответ
+		body := bytes.NewBuffer(reqJSON)
+		req := httptest.NewRequest(http.MethodPost, srv.URL+"/api/shorten", body)
+		req.RequestURI = ""
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Accept-Encoding", "gzip")
+
+		resp, err := http.DefaultClient.Do(req)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusCreated, resp.StatusCode)
+		defer resp.Body.Close()
+
+		// Ответ должен быть сжатым
+		assert.Equal(t, "gzip", resp.Header.Get("Content-Encoding"))
+
+		zr, err := gzip.NewReader(resp.Body)
+		require.NoError(t, err)
+		defer zr.Close()
+
+		var result map[string]string
+		err = json.NewDecoder(zr).Decode(&result)
+		require.NoError(t, err)
+		assert.Contains(t, result["result"], "http://localhost:8080/")
+	})
 }

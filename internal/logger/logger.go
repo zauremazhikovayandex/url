@@ -3,6 +3,7 @@ package logger
 import (
 	"github.com/zauremazhikovayandex/url/internal/logger/drivers"
 	"github.com/zauremazhikovayandex/url/internal/logger/message"
+	"net/http"
 	"time"
 )
 
@@ -45,4 +46,23 @@ func (l *Writer) WriteToLog(timeStart time.Time, originalURL string, requestType
 	Log.Info(&message.LogMessage{Message: "REQUEST INFO: %s",
 		Extra: &requestInfo,
 	})
+}
+
+func RequestLogger(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		timeStart := time.Now()
+		lrw := &loggingResponseWriter{ResponseWriter: w, statusCode: http.StatusOK}
+		next.ServeHTTP(lrw, r)
+		Logging.WriteToLog(timeStart, r.RequestURI, r.Method, lrw.statusCode, http.StatusText(lrw.statusCode))
+	})
+}
+
+type loggingResponseWriter struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+func (lrw *loggingResponseWriter) WriteHeader(code int) {
+	lrw.statusCode = code
+	lrw.ResponseWriter.WriteHeader(code)
 }

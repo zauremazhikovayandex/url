@@ -8,6 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/zauremazhikovayandex/url/internal/config"
 	"github.com/zauremazhikovayandex/url/internal/db/storage"
+	"github.com/zauremazhikovayandex/url/internal/gzip"
 	"github.com/zauremazhikovayandex/url/internal/logger"
 	"github.com/zauremazhikovayandex/url/internal/logger/message"
 	"io"
@@ -146,4 +147,30 @@ func GetHandler(w http.ResponseWriter, r *http.Request) {
 
 	logger.Logging.WriteToLog(timeStart, originalURL, "GET", http.StatusTemporaryRedirect, id)
 	http.Redirect(w, r, originalURL, http.StatusTemporaryRedirect)
+}
+
+func GzipMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ow := w
+
+		// Декодирование входящего тела, если оно сжато
+		if strings.Contains(r.Header.Get("Content-Encoding"), "gzip") {
+			cr, err := gzip.NewCompressReader(r.Body)
+			if err != nil {
+				http.Error(w, "Failed to decompress request body", http.StatusInternalServerError)
+				return
+			}
+			r.Body = cr
+			defer cr.Close()
+		}
+
+		// Сжатие ответа, если клиент его поддерживает
+		if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+			cw := gzip.NewCompressWriter(w)
+			ow = cw
+			defer cw.Close()
+		}
+
+		next.ServeHTTP(ow, r)
+	})
 }
