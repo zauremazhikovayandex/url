@@ -39,7 +39,7 @@ func TestWebhook(t *testing.T) {
 		},
 	}
 	config.InitConfig()
-	storage.InitStorage(config.AppConfig.FileStorage)
+	storage.InitStorage()
 	logger.New("info")
 
 	srv := httptest.NewServer(app.Router())

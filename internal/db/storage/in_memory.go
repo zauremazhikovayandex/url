@@ -2,6 +2,7 @@ package storage
 
 import (
 	"encoding/json"
+	"github.com/zauremazhikovayandex/url/internal/config"
 	"log"
 	"os"
 	"sync"
@@ -14,9 +15,10 @@ type Storage struct {
 	mu   sync.RWMutex
 }
 
-func InitStorage(filePath string) {
+func InitStorage() {
 	Store = &Storage{data: make(map[string]string)}
 
+	filePath := config.AppConfig.FileStorage
 	if err := Store.LoadFromFile(filePath); err != nil {
 		log.Printf("Failed to load store from file: %v", err)
 	}

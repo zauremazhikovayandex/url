@@ -24,7 +24,7 @@ func main() {
 
 func run() error {
 	config.InitConfig()
-	storage.InitStorage(config.AppConfig.FileStorage)
+	storage.InitStorage()
 	logger.New("info")
 
 	addr := config.AppConfig.ServerAddr
