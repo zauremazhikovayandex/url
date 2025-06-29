@@ -2,6 +2,7 @@ package config
 
 import (
 	"flag"
+	"fmt"
 	"os"
 )
 
@@ -13,52 +14,45 @@ type Config struct {
 	FileStorage string
 }
 
-func initURL() (string, string, string) {
+func InitConfig() {
+	// Парсим флаги во временные переменные
 	serverAddrFlag := flag.String("a", "", "port to run server")
 	baseURLFlag := flag.String("b", "", "base URL for short links")
 	fileStorageFlag := flag.String("f", "", "file storage")
 	flag.Parse()
 
-	// ENV переменные
-	envAddr := os.Getenv("SERVER_ADDRESS")
-	envBase := os.Getenv("BASE_URL")
-	envFileStorage := os.Getenv("FILE_STORAGE")
-
-	// Итоговые значения (приоритет: ENV > FLAG > DEFAULT)
+	// Устанавливаем значения по умолчанию
 	serverAddr := ":8080"
+	baseURL := "http://localhost:8080"
+	fileStorage := "/Users/zauremazhikova/GolandProjects/practicum/storage/url_history.json"
+
+	// Переопределяем флагами
 	if *serverAddrFlag != "" {
 		serverAddr = *serverAddrFlag
 	}
-	if envAddr != "" {
-		serverAddr = envAddr
-	}
-
-	baseURL := "http://localhost:8080"
 	if *baseURLFlag != "" {
 		baseURL = *baseURLFlag
 	}
-	if envBase != "" {
-		baseURL = envBase
-	}
-
-	fileStorage := "/Users/zauremazhikova/GolandProjects/practicum/storage/url_history.json"
 	if *fileStorageFlag != "" {
 		fileStorage = *fileStorageFlag
 	}
-	if envFileStorage != "" {
-		fileStorage = envFileStorage
+
+	// Окружением (имеет самый высокий приоритет)
+	if env := os.Getenv("SERVER_ADDRESS"); env != "" {
+		serverAddr = env
 	}
-
-	return serverAddr, baseURL, fileStorage
-}
-
-func InitConfig() {
-
-	serverAddr, baseURL, fileStorage := initURL()
+	if env := os.Getenv("BASE_URL"); env != "" {
+		baseURL = env
+	}
+	if env := os.Getenv("FILE_STORAGE"); env != "" {
+		fileStorage = env
+	}
 
 	AppConfig = &Config{
 		ServerAddr:  serverAddr,
 		BaseURL:     baseURL,
 		FileStorage: fileStorage,
 	}
+
+	fmt.Println("💾 Using file storage path:", AppConfig.FileStorage) // отладка
 }
