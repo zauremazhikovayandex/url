@@ -46,9 +46,9 @@ func run() error {
 		// Save to file
 		filePath := config.AppConfig.FileStorage
 		if err := storage.Store.ShutdownSaveToFile(filePath); err != nil {
-			log.Printf("Failed to save store to %s: %v", filePath, err)
+			log.Printf("Failed to save store: %v", err)
 		} else {
-			log.Printf("Store saved to %s", filePath)
+			log.Printf("Store saved to: %s", filePath)
 		}
 
 		// Shutdown server

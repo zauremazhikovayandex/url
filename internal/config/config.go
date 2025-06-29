@@ -24,7 +24,7 @@ func InitConfig() {
 	// Устанавливаем значения по умолчанию
 	serverAddr := ":8080"
 	baseURL := "http://localhost:8080"
-	fileStorage := "/Users/zauremazhikova/GolandProjects/practicum/storage/url_history.json"
+	fileStorage := "url_history.json"
 
 	// Переопределяем флагами
 	if *serverAddrFlag != "" {
