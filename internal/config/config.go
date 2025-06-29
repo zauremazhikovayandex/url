@@ -8,22 +8,26 @@ import (
 var AppConfig *Config
 
 type Config struct {
-	ServerAddr string
-	BaseURL    string
+	ServerAddr  string
+	BaseURL     string
+	FileStorage string
 }
 
-func initURL() (string, string) {
-	serverAddr, baseURL := "", ""
+func initURL() (string, string, string) {
+	serverAddr, baseURL, fileStorage := "", "", ""
 	defaultServerAddr, defaultBaseURL := ":8080", "http://localhost:8080"
+	defaultFileStorage := "/Users/zauremazhikova/GolandProjects/practicum/storage/url_history.json"
 
 	// флаги
 	flag.StringVar(&serverAddr, "a", "", "port to run server")
 	flag.StringVar(&baseURL, "b", "", "base URL for short links")
+	flag.StringVar(&fileStorage, "f", "", "file storage")
 	flag.Parse()
 
 	// ENV переменные
 	envAddr := os.Getenv("SERVER_ADDRESS")
 	envBase := os.Getenv("BASE_URL")
+	envFileStorage := os.Getenv("FILE_STORAGE")
 
 	// приоритет: env > флаг > default
 	if envAddr != "" {
@@ -40,15 +44,23 @@ func initURL() (string, string) {
 		baseURL = defaultBaseURL
 	}
 
-	return serverAddr, baseURL
+	if envFileStorage != "" {
+		fileStorage = envFileStorage
+	}
+	if fileStorage == "" {
+		fileStorage = defaultFileStorage
+	}
+
+	return serverAddr, baseURL, fileStorage
 }
 
 func InitConfig() {
 
-	serverAddr, baseURL := initURL()
+	serverAddr, baseURL, fileStorage := initURL()
 
 	AppConfig = &Config{
-		ServerAddr: serverAddr,
-		BaseURL:    baseURL,
+		ServerAddr:  serverAddr,
+		BaseURL:     baseURL,
+		FileStorage: fileStorage,
 	}
 }
