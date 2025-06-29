@@ -44,7 +44,7 @@ func InitConfig() {
 	if env := os.Getenv("BASE_URL"); env != "" {
 		baseURL = env
 	}
-	if env := os.Getenv("FILE_STORAGE"); env != "" {
+	if env := os.Getenv("FILE_STORAGE_PATH"); env != "" {
 		fileStorage = env
 	}
 
