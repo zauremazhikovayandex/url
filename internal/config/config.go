@@ -14,14 +14,9 @@ type Config struct {
 }
 
 func initURL() (string, string, string) {
-	serverAddr, baseURL, fileStorage := "", "", ""
-	defaultServerAddr, defaultBaseURL := ":8080", "http://localhost:8080"
-	defaultFileStorage := "/Users/zauremazhikova/GolandProjects/practicum/storage/url_history.json"
-
-	// флаги
-	flag.StringVar(&serverAddr, "a", "", "port to run server")
-	flag.StringVar(&baseURL, "b", "", "base URL for short links")
-	flag.StringVar(&fileStorage, "f", "", "file storage")
+	serverAddrFlag := flag.String("a", "", "port to run server")
+	baseURLFlag := flag.String("b", "", "base URL for short links")
+	fileStorageFlag := flag.String("f", "", "file storage")
 	flag.Parse()
 
 	// ENV переменные
@@ -29,26 +24,29 @@ func initURL() (string, string, string) {
 	envBase := os.Getenv("BASE_URL")
 	envFileStorage := os.Getenv("FILE_STORAGE")
 
-	// приоритет: env > флаг > default
+	// Итоговые значения (приоритет: ENV > FLAG > DEFAULT)
+	serverAddr := ":8080"
+	if *serverAddrFlag != "" {
+		serverAddr = *serverAddrFlag
+	}
 	if envAddr != "" {
 		serverAddr = envAddr
 	}
-	if serverAddr == "" {
-		serverAddr = defaultServerAddr
-	}
 
+	baseURL := "http://localhost:8080"
+	if *baseURLFlag != "" {
+		baseURL = *baseURLFlag
+	}
 	if envBase != "" {
 		baseURL = envBase
 	}
-	if baseURL == "" {
-		baseURL = defaultBaseURL
-	}
 
+	fileStorage := "/Users/zauremazhikova/GolandProjects/practicum/storage/url_history.json"
+	if *fileStorageFlag != "" {
+		fileStorage = *fileStorageFlag
+	}
 	if envFileStorage != "" {
 		fileStorage = envFileStorage
-	}
-	if fileStorage == "" {
-		fileStorage = defaultFileStorage
 	}
 
 	return serverAddr, baseURL, fileStorage
