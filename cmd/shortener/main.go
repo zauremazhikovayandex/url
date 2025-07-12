@@ -23,8 +23,11 @@ func main() {
 }
 
 func run() error {
+	//Init Config
 	config.InitConfig()
 	storage.InitStorage()
+
+	//Init Logger
 	logger.New("info")
 
 	addr := config.AppConfig.ServerAddr
