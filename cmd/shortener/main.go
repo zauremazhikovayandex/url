@@ -46,14 +46,12 @@ func run() error {
 		<-stop
 		log.Println("Shutting down server...")
 
-		if config.AppConfig.UseFileStorage == "Y" {
-			// Save to file
-			filePath := config.AppConfig.FileStorage
-			if err := storage.Store.ShutdownSaveToFile(filePath); err != nil {
-				log.Printf("Failed to save store: %v", err)
-			} else {
-				log.Printf("Store saved to: %s", filePath)
-			}
+		// Save to file
+		filePath := config.AppConfig.FileStorage
+		if err := storage.Store.ShutdownSaveToFile(filePath); err != nil {
+			log.Printf("Failed to save store: %v", err)
+		} else {
+			log.Printf("Store saved to: %s", filePath)
 		}
 
 		// Shutdown server
