@@ -177,10 +177,15 @@ func GzipMiddleware(next http.Handler) http.Handler {
 }
 
 func GetDBPing(w http.ResponseWriter, r *http.Request) {
-	err := postgres.ConnectToDBOnce()
-	if err != nil {
+	conn, err := postgres.SQLInstance()
+	if conn == nil || err != nil {
 		http.Error(w, "fail DB connection", http.StatusInternalServerError)
 	} else {
-		w.WriteHeader(http.StatusOK)
+		err = conn.Ping()
+		if err != nil {
+			http.Error(w, "fail DB connection", http.StatusInternalServerError)
+		} else {
+			w.WriteHeader(http.StatusOK)
+		}
 	}
 }

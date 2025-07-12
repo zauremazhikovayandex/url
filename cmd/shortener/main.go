@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/zauremazhikovayandex/url/internal/app"
 	"github.com/zauremazhikovayandex/url/internal/config"
+	"github.com/zauremazhikovayandex/url/internal/db/postgres"
 	"github.com/zauremazhikovayandex/url/internal/db/storage"
 	"github.com/zauremazhikovayandex/url/internal/logger"
 	"log"
@@ -26,6 +27,10 @@ func run() error {
 	//Init Config
 	config.InitConfig()
 	storage.InitStorage()
+	conn, err := postgres.SQLInstance()
+	if conn == nil || err != nil {
+		log.Fatal("Error connecting to database")
+	}
 
 	//Init Logger
 	logger.New("info")
