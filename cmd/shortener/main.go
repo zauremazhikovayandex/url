@@ -25,14 +25,10 @@ func main() {
 func run() error {
 	//Init Config
 	config.InitConfig()
+	storage.InitStorage()
 
 	//Init Logger
 	logger.New("info")
-
-	if config.AppConfig.UseFileStorage == "Y" {
-		// Init File Storage
-		storage.InitStorage()
-	}
 
 	addr := config.AppConfig.ServerAddr
 	fmt.Println("Running server on", addr)
