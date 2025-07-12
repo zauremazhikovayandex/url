@@ -11,23 +11,23 @@ import (
 	"time"
 )
 
-type SqlConnection struct {
-	PgSql   *pgxpool.Pool
+type SQLConnection struct {
+	PgSQL   *pgxpool.Pool
 	PgConn  *pgxpool.Conn
 	Timeout time.Duration
 }
 
 var (
-	onceSqlConnectionInstance sync.Once
-	pgSql                     *SqlConnection
+	onceSQLConnectionInstance sync.Once
+	pgSQL                     *SQLConnection
 )
 
-func SqlInstance() (*SqlConnection, error) {
+func SQLInstance() (*SQLConnection, error) {
 	var initError error
 	cfg := config.AppConfig.PGConfig
 	timeout := time.Duration(cfg.DBTimeout) * time.Second
 
-	onceSqlConnectionInstance.Do(func() {
+	onceSQLConnectionInstance.Do(func() {
 		pgCfg, err := pgxpool.ParseConfig(cfg.DBConnection)
 		if err != nil {
 			initError = fmt.Errorf("failed to parse PG config: %w", err)
@@ -50,32 +50,32 @@ func SqlInstance() (*SqlConnection, error) {
 			return
 		}
 
-		pgSql = &SqlConnection{
-			PgSql:   dbPool,
+		pgSQL = &SQLConnection{
+			PgSQL:   dbPool,
 			PgConn:  conn,
 			Timeout: timeout,
 		}
 	})
 
-	if initError != nil || pgSql == nil {
+	if initError != nil || pgSQL == nil {
 		return nil, initError
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	if err := pgSql.PgSql.Ping(ctx); err != nil {
+	if err := pgSQL.PgSQL.Ping(ctx); err != nil {
 		return nil, fmt.Errorf(`failed ping: %w`, err)
 	}
 
-	return pgSql, nil
+	return pgSQL, nil
 }
 
-func (*SqlConnection) Ping() error {
-	if pgSql != nil && pgSql.PgSql != nil {
+func (*SQLConnection) Ping() error {
+	if pgSQL != nil && pgSQL.PgSQL != nil {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		err := pgSql.PgSql.Ping(ctx)
+		err := pgSQL.PgSQL.Ping(ctx)
 		if err != nil {
 			return fmt.Errorf(`failed ping: %w`, err)
 		}
@@ -85,18 +85,18 @@ func (*SqlConnection) Ping() error {
 	return nil
 }
 
-func (*SqlConnection) CloseSqlInstance() {
-	if pgSql != nil && pgSql.PgSql != nil {
+func (*SQLConnection) CloseSQLInstance() {
+	if pgSQL != nil && pgSQL.PgSQL != nil {
 		logger.Log.Info(&message.LogMessage{Message: "Closing database connection pool..."})
-		pgSql.PgSql.Close()
-		pgSql = nil // Сбрасываем инстанс
+		pgSQL.PgSQL.Close()
+		pgSQL = nil // Сбрасываем инстанс
 		logger.Log.Info(&message.LogMessage{Message: "Database connection pool closed."})
 	}
 }
 
 func ConnectToDBOnce() error {
 	cfg := config.AppConfig.PGConfig
-	pgCfg, err := pgxpool.ParseConfig(cfg.DBConnection)
+	pgCfg, _ := pgxpool.ParseConfig(cfg.DBConnection)
 	dbPool, err := pgxpool.ConnectConfig(context.Background(), pgCfg)
 	if err != nil {
 		return fmt.Errorf("failed to connect to PG: %w", err)
