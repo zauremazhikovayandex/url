@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/go-chi/chi/v5"
 	"github.com/zauremazhikovayandex/url/internal/config"
+	"github.com/zauremazhikovayandex/url/internal/db/postgres"
 	"github.com/zauremazhikovayandex/url/internal/db/storage"
 	"github.com/zauremazhikovayandex/url/internal/gzip"
 	"github.com/zauremazhikovayandex/url/internal/logger"
@@ -173,4 +174,15 @@ func GzipMiddleware(next http.Handler) http.Handler {
 
 		next.ServeHTTP(ow, r)
 	})
+}
+
+func GetDBPing(w http.ResponseWriter, r *http.Request) {
+	db, _ := postgres.SqlInstance()
+
+	err := db.Ping()
+	if err != nil {
+		http.Error(w, "fail DB connection", http.StatusInternalServerError)
+	} else {
+		w.WriteHeader(http.StatusOK)
+	}
 }

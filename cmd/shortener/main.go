@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"github.com/zauremazhikovayandex/url/internal/app"
 	"github.com/zauremazhikovayandex/url/internal/config"
+	"github.com/zauremazhikovayandex/url/internal/db/postgres"
 	"github.com/zauremazhikovayandex/url/internal/db/storage"
 	"github.com/zauremazhikovayandex/url/internal/logger"
+	"github.com/zauremazhikovayandex/url/internal/logger/message"
 	"log"
 	"net/http"
 	"os"
@@ -23,9 +25,22 @@ func main() {
 }
 
 func run() error {
+	//Init Config
 	config.InitConfig()
-	storage.InitStorage()
+
+	//Init Logger
 	logger.New("info")
+
+	if config.AppConfig.UseFileStorage == "Y" {
+		// Init File Storage
+		storage.InitStorage()
+	} else {
+		// Init Postgres Connection
+		conn, err := postgres.SqlInstance()
+		if conn == nil || err != nil {
+			log.Fatal("Error connecting to database")
+		}
+	}
 
 	addr := config.AppConfig.ServerAddr
 	fmt.Println("Running server on", addr)
@@ -43,12 +58,21 @@ func run() error {
 		<-stop
 		log.Println("Shutting down server...")
 
-		// Save to file
-		filePath := config.AppConfig.FileStorage
-		if err := storage.Store.ShutdownSaveToFile(filePath); err != nil {
-			log.Printf("Failed to save store: %v", err)
+		if config.AppConfig.UseFileStorage == "Y" {
+			// Save to file
+			filePath := config.AppConfig.FileStorage
+			if err := storage.Store.ShutdownSaveToFile(filePath); err != nil {
+				log.Printf("Failed to save store: %v", err)
+			} else {
+				log.Printf("Store saved to: %s", filePath)
+			}
 		} else {
-			log.Printf("Store saved to: %s", filePath)
+			conn, err := postgres.SqlInstance()
+			if conn == nil || err != nil {
+				logger.Log.Error(&message.LogMessage{Message: "Error closing database"})
+			} else {
+				conn.CloseSqlInstance()
+			}
 		}
 
 		// Shutdown server
