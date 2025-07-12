@@ -9,8 +9,10 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/zauremazhikovayandex/url/internal/app"
 	"github.com/zauremazhikovayandex/url/internal/config"
+	"github.com/zauremazhikovayandex/url/internal/db/postgres"
 	"github.com/zauremazhikovayandex/url/internal/db/storage"
 	"github.com/zauremazhikovayandex/url/internal/logger"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -39,8 +41,17 @@ func TestWebhook(t *testing.T) {
 		},
 	}
 	config.InitConfig()
-	storage.InitStorage()
 	logger.New("info")
+	if config.AppConfig.UseFileStorage == "Y" {
+		// Init File Storage
+		storage.InitStorage()
+	} else {
+		// Init Postgres Connection
+		conn, err := postgres.SqlInstance()
+		if conn == nil || err != nil {
+			log.Fatal("Error connecting to database")
+		}
+	}
 
 	srv := httptest.NewServer(app.Router())
 	bURL := srv.URL

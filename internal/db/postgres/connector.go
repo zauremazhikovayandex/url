@@ -28,29 +28,32 @@ func SqlInstance() (*SqlConnection, error) {
 	timeout := time.Duration(cfg.DBTimeout) * time.Second
 
 	onceSqlConnectionInstance.Do(func() {
-		//Создаем новое соединение
 		pgCfg, err := pgxpool.ParseConfig(cfg.DBConnection)
 		if err != nil {
-			initError = err
-		} else {
-			//Выставляем конфигурацию подключения к Postgres
-			pgCfg.MaxConnLifetime = 10 * time.Minute
-			pgCfg.HealthCheckPeriod = time.Minute
+			initError = fmt.Errorf("failed to parse PG config: %w", err)
+			return
+		}
 
-			// Создаем pool коннекторов
-			dbPool, errCfg := pgxpool.ConnectConfig(context.Background(), pgCfg)
-			if errCfg != nil {
-				initError = errCfg
-			}
-			conn, errCfg := dbPool.Acquire(context.Background())
-			if errCfg != nil {
-				initError = errCfg
-			}
-			pgSql = &SqlConnection{
-				PgSql:   dbPool,
-				PgConn:  conn,
-				Timeout: timeout * time.Millisecond,
-			}
+		pgCfg.MaxConnLifetime = 10 * time.Minute
+		pgCfg.HealthCheckPeriod = time.Minute
+
+		dbPool, err := pgxpool.ConnectConfig(context.Background(), pgCfg)
+		if err != nil {
+			initError = fmt.Errorf("failed to connect to PG: %w", err)
+			return
+		}
+
+		conn, err := dbPool.Acquire(context.Background())
+		if err != nil {
+			initError = fmt.Errorf("failed to acquire connection: %w", err)
+			dbPool.Close() // не забываем закрыть, если Acquire не удался
+			return
+		}
+
+		pgSql = &SqlConnection{
+			PgSql:   dbPool,
+			PgConn:  conn,
+			Timeout: timeout,
 		}
 	})
 
