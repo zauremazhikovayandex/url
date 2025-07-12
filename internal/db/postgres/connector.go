@@ -7,7 +7,6 @@ import (
 	"github.com/zauremazhikovayandex/url/internal/config"
 	"github.com/zauremazhikovayandex/url/internal/logger"
 	"github.com/zauremazhikovayandex/url/internal/logger/message"
-	"sync"
 	"time"
 )
 
@@ -18,8 +17,7 @@ type SQLConnection struct {
 }
 
 var (
-	onceSQLConnectionInstance sync.Once
-	pgSQL                     *SQLConnection
+	pgSQL *SQLConnection
 )
 
 func SQLInstance() (*SQLConnection, error) {
@@ -27,35 +25,27 @@ func SQLInstance() (*SQLConnection, error) {
 	cfg := config.AppConfig.PGConfig
 	timeout := time.Duration(cfg.DBTimeout) * time.Second
 
-	onceSQLConnectionInstance.Do(func() {
-		pgCfg, err := pgxpool.ParseConfig(cfg.DBConnection)
-		if err != nil {
-			initError = fmt.Errorf("failed to parse PG config: %w", err)
-			return
-		}
+	pgCfg, err := pgxpool.ParseConfig(cfg.DBConnection)
+	if err != nil {
+		initError = fmt.Errorf("failed to parse PG config: %w", err)
+	}
 
-		pgCfg.MaxConnLifetime = 10 * time.Minute
-		pgCfg.HealthCheckPeriod = time.Minute
+	dbPool, err := pgxpool.ConnectConfig(context.Background(), pgCfg)
+	if err != nil {
+		initError = fmt.Errorf("failed to connect to PG: %w", err)
+	}
 
-		dbPool, err := pgxpool.ConnectConfig(context.Background(), pgCfg)
-		if err != nil {
-			initError = fmt.Errorf("failed to connect to PG: %w", err)
-			return
-		}
+	conn, err := dbPool.Acquire(context.Background())
+	if err != nil {
+		dbPool.Close() // не забываем закрыть, если Acquire не удался
+		initError = fmt.Errorf("failed to acquire connection: %w", err)
+	}
 
-		conn, err := dbPool.Acquire(context.Background())
-		if err != nil {
-			initError = fmt.Errorf("failed to acquire connection: %w", err)
-			dbPool.Close() // не забываем закрыть, если Acquire не удался
-			return
-		}
-
-		pgSQL = &SQLConnection{
-			PgSQL:   dbPool,
-			PgConn:  conn,
-			Timeout: timeout,
-		}
-	})
+	pgSQL = &SQLConnection{
+		PgSQL:   dbPool,
+		PgConn:  conn,
+		Timeout: timeout,
+	}
 
 	if initError != nil || pgSQL == nil {
 		return nil, initError
@@ -64,7 +54,7 @@ func SQLInstance() (*SQLConnection, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	if err := pgSQL.PgSQL.Ping(ctx); err != nil {
+	if err = pgSQL.PgSQL.Ping(ctx); err != nil {
 		return nil, fmt.Errorf(`failed ping: %w`, err)
 	}
 

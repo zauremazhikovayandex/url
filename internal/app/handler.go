@@ -181,11 +181,6 @@ func GetDBPing(w http.ResponseWriter, r *http.Request) {
 	if conn == nil || err != nil {
 		http.Error(w, "fail DB connection", http.StatusInternalServerError)
 	} else {
-		err = conn.Ping()
-		if err != nil {
-			http.Error(w, "fail DB connection", http.StatusInternalServerError)
-		} else {
-			w.WriteHeader(http.StatusOK)
-		}
+		w.WriteHeader(http.StatusOK)
 	}
 }

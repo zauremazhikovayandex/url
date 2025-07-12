@@ -71,7 +71,7 @@ func InitConfig() {
 		UseFileStorage: useFileStorage,
 		PGConfig: &PostgresConfig{
 			DBConnection: dbConnection,
-			DBTimeout:    5,
+			DBTimeout:    10,
 		},
 	}
 
