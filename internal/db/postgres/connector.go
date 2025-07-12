@@ -93,3 +93,15 @@ func (*SqlConnection) CloseSqlInstance() {
 		logger.Log.Info(&message.LogMessage{Message: "Database connection pool closed."})
 	}
 }
+
+func ConnectToDBOnce() error {
+	cfg := config.AppConfig.PGConfig
+	pgCfg, err := pgxpool.ParseConfig(cfg.DBConnection)
+	dbPool, err := pgxpool.ConnectConfig(context.Background(), pgCfg)
+	if err != nil {
+		return fmt.Errorf("failed to connect to PG: %w", err)
+	} else {
+		dbPool.Close()
+		return nil
+	}
+}
