@@ -13,6 +13,7 @@ func SelectURL(ctx context.Context, id string) (string, error) {
 		return "", err
 	}
 	db := instance.PgSQL
+	PrepareDB(instance)
 
 	timeoutCtx, cancel := context.WithTimeout(ctx, instance.Timeout)
 	defer cancel()
@@ -34,6 +35,7 @@ func InsertURL(ctx context.Context, id string, originalURL string) error {
 		return err
 	}
 	db := instance.PgSQL
+	PrepareDB(instance)
 
 	timeoutCtx, cancel := context.WithTimeout(ctx, instance.Timeout)
 	defer cancel()
@@ -57,13 +59,8 @@ func CreateTables(db *SQLConnection) error {
 	return nil
 }
 
-func PrepareDB() {
-	db, err := SQLInstance()
-	if err != nil {
-		logger.Log.Error(&message.LogMessage{Message: fmt.Sprintf("DB Prepare ERROR: %s", err)})
-		return
-	}
-	err = CreateTables(db)
+func PrepareDB(db *SQLConnection) {
+	err := CreateTables(db)
 	if err != nil {
 		logger.Log.Error(&message.LogMessage{Message: fmt.Sprintf("DB CreateTables ERROR: %s", err)})
 	}

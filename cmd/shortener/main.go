@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/zauremazhikovayandex/url/internal/app"
 	"github.com/zauremazhikovayandex/url/internal/config"
-	"github.com/zauremazhikovayandex/url/internal/db/postgres"
 	"github.com/zauremazhikovayandex/url/internal/db/storage"
 	"github.com/zauremazhikovayandex/url/internal/logger"
 	"log"
@@ -27,8 +26,6 @@ func run() error {
 	config.InitConfig()
 
 	storage.InitStorage()
-
-	postgres.PrepareDB()
 
 	//Init Logger
 	logger.New("info")
