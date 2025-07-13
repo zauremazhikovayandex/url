@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/zauremazhikovayandex/url/internal/app"
 	"github.com/zauremazhikovayandex/url/internal/config"
+	"github.com/zauremazhikovayandex/url/internal/db/postgres"
 	"github.com/zauremazhikovayandex/url/internal/db/storage"
 	"github.com/zauremazhikovayandex/url/internal/logger"
 	"log"
@@ -25,7 +26,16 @@ func main() {
 func run() error {
 	//Init Config
 	config.InitConfig()
-	storage.InitStorage()
+
+	storageType := config.AppConfig.StorageType
+	if storageType == "File" {
+		storage.InitStorage()
+	} else if storageType == "DB" {
+		err := postgres.PrepareDB()
+		if err != nil {
+			log.Printf("Failed prepare database: %v", err)
+		}
+	}
 
 	//Init Logger
 	logger.New("info")
@@ -40,18 +50,20 @@ func run() error {
 	}
 
 	// Gracefully shutdown
-	go func() {
+	go func(storageType string) {
 		stop := make(chan os.Signal, 1)
 		signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 		<-stop
 		log.Println("Shutting down server...")
 
-		// Save to file
-		filePath := config.AppConfig.FileStorage
-		if err := storage.Store.ShutdownSaveToFile(filePath); err != nil {
-			log.Printf("Failed to save store: %v", err)
-		} else {
-			log.Printf("Store saved to: %s", filePath)
+		if storageType == "File" {
+			// Save to file
+			filePath := config.AppConfig.FileStorage
+			if err := storage.Store.ShutdownSaveToFile(filePath); err != nil {
+				log.Printf("Failed to save store: %v", err)
+			} else {
+				log.Printf("Store saved to: %s", filePath)
+			}
 		}
 
 		// Shutdown server
@@ -60,7 +72,7 @@ func run() error {
 		if err := srv.Shutdown(ctx); err != nil {
 			log.Printf("Shutdown error: %v", err)
 		}
-	}()
+	}(storageType)
 
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return fmt.Errorf("server error: %w", err)

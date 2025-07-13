@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
@@ -39,6 +40,9 @@ func isValidURL(rawURL string) bool {
 func PostHandler(w http.ResponseWriter, r *http.Request) {
 
 	timeStart := time.Now()
+	storageType := config.AppConfig.StorageType
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	body, err := io.ReadAll(r.Body)
 	if err != nil || len(body) == 0 {
@@ -62,7 +66,14 @@ func PostHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	storage.Store.Set(id, originalURL)
+	if storageType == "DB" {
+		err = postgres.InsertURL(ctx, id, originalURL)
+		if err != nil {
+			logger.Log.Error(&message.LogMessage{Message: fmt.Sprintf("Storage ERROR: %s", err)})
+		}
+	} else {
+		storage.Store.Set(id, originalURL)
+	}
 
 	shortURL := fmt.Sprintf("%s/%s", config.AppConfig.BaseURL, id)
 	w.Header().Set("Content-Type", "text/plain")
@@ -76,7 +87,11 @@ func PostHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func PostShortenHandler(w http.ResponseWriter, r *http.Request) {
+
 	timeStart := time.Now()
+	storageType := config.AppConfig.StorageType
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	// Структура для чтения входного JSON
 	type RequestPayload struct {
@@ -118,7 +133,14 @@ func PostShortenHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	storage.Store.Set(id, originalURL)
+	if storageType == "DB" {
+		err = postgres.InsertURL(ctx, id, originalURL)
+		if err != nil {
+			logger.Log.Error(&message.LogMessage{Message: fmt.Sprintf("Storage ERROR: %s", err)})
+		}
+	} else {
+		storage.Store.Set(id, originalURL)
+	}
 
 	shortURL := fmt.Sprintf("%s/%s", config.AppConfig.BaseURL, id)
 
@@ -131,7 +153,12 @@ func PostShortenHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func GetHandler(w http.ResponseWriter, r *http.Request) {
+
 	timeStart := time.Now()
+	storageType := config.AppConfig.StorageType
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	id := chi.URLParam(r, "id")
 	if id == "" {
 		http.Error(w, "Missing ID", http.StatusBadRequest)
@@ -139,15 +166,27 @@ func GetHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	originalURL, ok := storage.Store.Get(id)
-	if !ok || originalURL == "" {
-		http.Error(w, "URL not found", http.StatusBadRequest)
-		logger.Logging.WriteToLog(timeStart, "", "GET", http.StatusBadRequest, "URL not found")
-		return
+	if storageType == "DB" {
+		originalURL, err := postgres.SelectURL(ctx, id)
+		if err != nil || originalURL == "" {
+			http.Error(w, "URL not found", http.StatusBadRequest)
+			logger.Logging.WriteToLog(timeStart, "", "GET", http.StatusBadRequest, "URL not found")
+			return
+		}
+		logger.Logging.WriteToLog(timeStart, originalURL, "GET", http.StatusTemporaryRedirect, id)
+		http.Redirect(w, r, originalURL, http.StatusTemporaryRedirect)
+
+	} else {
+		originalURL, ok := storage.Store.Get(id)
+		if !ok || originalURL == "" {
+			http.Error(w, "URL not found", http.StatusBadRequest)
+			logger.Logging.WriteToLog(timeStart, "", "GET", http.StatusBadRequest, "URL not found")
+			return
+		}
+		logger.Logging.WriteToLog(timeStart, originalURL, "GET", http.StatusTemporaryRedirect, id)
+		http.Redirect(w, r, originalURL, http.StatusTemporaryRedirect)
 	}
 
-	logger.Logging.WriteToLog(timeStart, originalURL, "GET", http.StatusTemporaryRedirect, id)
-	http.Redirect(w, r, originalURL, http.StatusTemporaryRedirect)
 }
 
 func GzipMiddleware(next http.Handler) http.Handler {

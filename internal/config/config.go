@@ -14,6 +14,7 @@ type Config struct {
 	UseFileStorage string
 	FileStorage    string
 	PGConfig       *PostgresConfig
+	StorageType    string
 }
 
 type PostgresConfig struct {
@@ -32,9 +33,8 @@ func InitConfig() {
 	// Устанавливаем значения по умолчанию
 	serverAddr := ":8080"
 	baseURL := "http://localhost:8080"
-	useFileStorage := "N"
-	fileStorage := "url_history.json"
-	dbConnection := "host=localhost port=5432 user=postgres password=postgres dbname=aviato sslmode=disable"
+	fileStorage := ""
+	dbConnection := ""
 
 	// Переопределяем флагами
 	if *serverAddrFlag != "" {
@@ -60,22 +60,31 @@ func InitConfig() {
 	if env := os.Getenv("FILE_STORAGE_PATH"); env != "" {
 		fileStorage = env
 	}
-	if env := os.Getenv("USE_FILE_STORAGE"); env != "" {
-		useFileStorage = env
+	if env := os.Getenv("DATABASE_DSN"); env != "" {
+		dbConnection = env
+	}
+
+	storageType := "Memory"
+	if dbConnection != "" {
+		storageType = "DB"
+	} else if fileStorage != "" {
+		storageType = "File"
 	}
 
 	AppConfig = &Config{
-		ServerAddr:     serverAddr,
-		BaseURL:        baseURL,
-		FileStorage:    fileStorage,
-		UseFileStorage: useFileStorage,
+		ServerAddr:  serverAddr,
+		BaseURL:     baseURL,
+		FileStorage: fileStorage,
 		PGConfig: &PostgresConfig{
 			DBConnection: dbConnection,
 			DBTimeout:    10,
 		},
+		StorageType: storageType,
 	}
 
-	if useFileStorage == "Y" {
+	fmt.Println("Storage type:", storageType)
+
+	if storageType == "File" {
 		fmt.Println("💾 Using file storage path:", AppConfig.FileStorage) // отладка
 	}
 }
