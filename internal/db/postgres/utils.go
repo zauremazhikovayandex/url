@@ -2,7 +2,10 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"github.com/jackc/pgconn"
+	"github.com/jackc/pgerrcode"
 	"github.com/zauremazhikovayandex/url/internal/logger"
 	"github.com/zauremazhikovayandex/url/internal/logger/message"
 )
@@ -43,16 +46,44 @@ func InsertURL(ctx context.Context, id string, originalURL string) error {
 	query := "INSERT INTO urls (id, originalURL) VALUES ($1, $2)"
 
 	_, err = db.Exec(timeoutCtx, query, id, originalURL)
-	return err
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
+			return fmt.Errorf("duplicate_original_url")
+		}
+		return err
+	}
+	return nil
+}
+
+func SelectIDByOriginalURL(ctx context.Context, originalURL string) (string, error) {
+	instance, err := SQLInstance()
+	if err != nil {
+		return "", err
+	}
+	db := instance.PgSQL
+	PrepareDB(instance)
+
+	timeoutCtx, cancel := context.WithTimeout(ctx, instance.Timeout)
+	defer cancel()
+
+	query := "SELECT id FROM urls WHERE originalURL = $1"
+
+	var id string
+	err = db.QueryRow(timeoutCtx, query, originalURL).Scan(&id)
+	if err != nil {
+		return "", err
+	}
+	return id, nil
 }
 
 func CreateTables(db *SQLConnection) error {
 	ctx := context.Background()
-	_, err := db.PgSQL.Query(ctx,
+	_, err := db.PgSQL.Exec(ctx,
 		`CREATE TABLE IF NOT EXISTS urls (
-        id TEXT,
-        originalURL TEXT
-      )`)
+			id TEXT,
+			originalURL TEXT UNIQUE
+		)`)
 	if err != nil {
 		return err
 	}

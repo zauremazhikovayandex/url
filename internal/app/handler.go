@@ -136,7 +136,26 @@ func PostShortenHandler(w http.ResponseWriter, r *http.Request) {
 	if storageType == "DB" {
 		err = postgres.InsertURL(ctx, id, originalURL)
 		if err != nil {
+			if err.Error() == "duplicate_original_url" {
+				// Запрашиваем существующий ID
+				existingID, err := postgres.SelectIDByOriginalURL(ctx, originalURL)
+				if err != nil {
+					http.Error(w, "Internal server error", http.StatusInternalServerError)
+					logger.Logging.WriteToLog(timeStart, originalURL, "POST", http.StatusInternalServerError, "Failed to fetch existing ID")
+					return
+				}
+				shortURL := fmt.Sprintf("%s/%s", config.AppConfig.BaseURL, existingID)
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusConflict)
+				json.NewEncoder(w).Encode(ResponsePayload{Result: shortURL})
+				logger.Logging.WriteToLog(timeStart, originalURL, "POST", http.StatusConflict, "Duplicate URL")
+				return
+			}
+
+			// Другая ошибка
 			logger.Log.Error(&message.LogMessage{Message: fmt.Sprintf("Storage ERROR: %s", err)})
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
 		}
 	} else {
 		storage.Store.Set(id, originalURL)
