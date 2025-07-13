@@ -63,7 +63,8 @@ func PrepareDB() {
 		logger.Log.Error(&message.LogMessage{Message: fmt.Sprintf("DB Prepare ERROR: %s", err)})
 		return
 	}
-	if err = CreateTables(db); err != nil {
+	err = CreateTables(db)
+	if err != nil {
 		logger.Log.Error(&message.LogMessage{Message: fmt.Sprintf("DB CreateTables ERROR: %s", err)})
 	}
 }
