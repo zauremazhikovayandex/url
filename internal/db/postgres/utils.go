@@ -2,6 +2,9 @@ package postgres
 
 import (
 	"context"
+	"fmt"
+	"github.com/zauremazhikovayandex/url/internal/logger"
+	"github.com/zauremazhikovayandex/url/internal/logger/message"
 )
 
 func SelectURL(ctx context.Context, id string) (string, error) {
@@ -14,7 +17,7 @@ func SelectURL(ctx context.Context, id string) (string, error) {
 	timeoutCtx, cancel := context.WithTimeout(ctx, instance.Timeout)
 	defer cancel()
 
-	query := "SELECT \"originalURL\" FROM urls WHERE \"id\" = $1"
+	query := "SELECT originalURL FROM urls WHERE id = $1"
 
 	var originalURL string
 	err = db.QueryRow(timeoutCtx, query, id).Scan(&originalURL)
@@ -35,22 +38,18 @@ func InsertURL(ctx context.Context, id string, originalURL string) error {
 	timeoutCtx, cancel := context.WithTimeout(ctx, instance.Timeout)
 	defer cancel()
 
-	query := "INSERT INTO urls (\"id\", \"originalURL\") VALUES ($1, $2)"
+	query := "INSERT INTO urls (id, originalURL) VALUES ($1, $2)"
 
 	_, err = db.Exec(timeoutCtx, query, id, originalURL)
 	return err
 }
 
-func CreateTables() error {
-	db, err := SQLInstance()
-	if err != nil {
-		return err
-	}
+func CreateTables(db *SQLConnection) error {
 	ctx := context.Background()
-	_, err = db.PgSQL.Query(ctx,
+	_, err := db.PgSQL.Query(ctx,
 		`CREATE TABLE IF NOT EXISTS urls (
-        "id" TEXT,
-        "originalURL" TEXT
+        id TEXT,
+        originalURL TEXT
       )`)
 	if err != nil {
 		return err
@@ -58,9 +57,15 @@ func CreateTables() error {
 	return nil
 }
 
-func PrepareDB() error {
+func PrepareDB() {
 
-	err := CreateTables()
-	return err
+	db, err := SQLInstance()
+	if err != nil {
+		logger.Log.Error(&message.LogMessage{Message: fmt.Sprintf("DB Prepare ERROR: %s", err)})
+	}
+	err = CreateTables(db)
+	if err != nil {
+		logger.Log.Error(&message.LogMessage{Message: fmt.Sprintf("DB Prepare ERROR: %s", err)})
+	}
 
 }

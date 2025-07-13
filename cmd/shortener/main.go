@@ -24,14 +24,11 @@ func main() {
 }
 
 func run() error {
-	//Init Config
 	config.InitConfig()
 
 	storage.InitStorage()
-	err := postgres.PrepareDB()
-	if err != nil {
-		log.Printf("Failed prepare database: %v", err)
-	}
+
+	postgres.PrepareDB()
 
 	//Init Logger
 	logger.New("info")
