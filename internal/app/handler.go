@@ -38,7 +38,6 @@ func isValidURL(rawURL string) bool {
 }
 
 func PostHandler(w http.ResponseWriter, r *http.Request) {
-
 	timeStart := time.Now()
 	storageType := config.AppConfig.StorageType
 	ctx, cancel := context.WithCancel(context.Background())
@@ -62,28 +61,51 @@ func PostHandler(w http.ResponseWriter, r *http.Request) {
 	id, err := generateShortID(8)
 	if err != nil || id == "" {
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		logger.Logging.WriteToLog(timeStart, originalURL, "POST", http.StatusInternalServerError, "Internal server error")
+		logger.Logging.WriteToLog(timeStart, originalURL, "POST", http.StatusInternalServerError, "Failed to generate short ID")
 		return
 	}
+
+	var shortURL string
 
 	if storageType == "DB" {
 		err = postgres.InsertURL(ctx, id, originalURL)
 		if err != nil {
+			if err.Error() == "duplicate_original_url" {
+				// Получаем уже существующий ID
+				existingID, err := postgres.SelectIDByOriginalURL(ctx, originalURL)
+				if err != nil {
+					http.Error(w, "Internal server error", http.StatusInternalServerError)
+					logger.Logging.WriteToLog(timeStart, originalURL, "POST", http.StatusInternalServerError, "Failed to fetch existing ID")
+					return
+				}
+				shortURL = fmt.Sprintf("%s/%s", config.AppConfig.BaseURL, existingID)
+				w.Header().Set("Content-Type", "text/plain")
+				w.WriteHeader(http.StatusConflict)
+				_, _ = w.Write([]byte(shortURL))
+				logger.Logging.WriteToLog(timeStart, originalURL, "POST", http.StatusConflict, "Duplicate URL")
+				return
+			}
+
+			// Неизвестная ошибка — 500
 			logger.Log.Error(&message.LogMessage{Message: fmt.Sprintf("Storage ERROR: %s", err)})
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
 		}
+
+		shortURL = fmt.Sprintf("%s/%s", config.AppConfig.BaseURL, id)
 	} else {
 		storage.Store.Set(id, originalURL)
+		shortURL = fmt.Sprintf("%s/%s", config.AppConfig.BaseURL, id)
 	}
 
-	shortURL := fmt.Sprintf("%s/%s", config.AppConfig.BaseURL, id)
+	// Успешный ответ
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusCreated)
 	_, err = w.Write([]byte(shortURL))
 	if err != nil {
-		logger.Log.Error(&message.LogMessage{Message: fmt.Sprintf("Storage ERROR: %s", err)})
+		logger.Log.Error(&message.LogMessage{Message: fmt.Sprintf("Write ERROR: %s", err)})
 	}
 	logger.Logging.WriteToLog(timeStart, originalURL, "POST", http.StatusCreated, shortURL)
-
 }
 
 func PostShortenHandler(w http.ResponseWriter, r *http.Request) {
