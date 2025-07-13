@@ -58,14 +58,12 @@ func CreateTables(db *SQLConnection) error {
 }
 
 func PrepareDB() {
-
 	db, err := SQLInstance()
 	if err != nil {
 		logger.Log.Error(&message.LogMessage{Message: fmt.Sprintf("DB Prepare ERROR: %s", err)})
+		return
 	}
-	err = CreateTables(db)
-	if err != nil {
-		logger.Log.Error(&message.LogMessage{Message: fmt.Sprintf("DB Prepare ERROR: %s", err)})
+	if err = CreateTables(db); err != nil {
+		logger.Log.Error(&message.LogMessage{Message: fmt.Sprintf("DB CreateTables ERROR: %s", err)})
 	}
-
 }

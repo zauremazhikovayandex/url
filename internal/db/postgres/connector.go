@@ -21,44 +21,40 @@ var (
 )
 
 func SQLInstance() (*SQLConnection, error) {
-	var initError error
 	cfg := config.AppConfig.PGConfig
 	timeout := time.Duration(cfg.DBTimeout) * time.Second
 
 	pgCfg, err := pgxpool.ParseConfig(cfg.DBConnection)
 	if err != nil {
-		initError = fmt.Errorf("failed to parse PG config: %w", err)
+		return nil, fmt.Errorf("failed to parse PG config: %w", err)
 	}
 
 	dbPool, err := pgxpool.ConnectConfig(context.Background(), pgCfg)
 	if err != nil {
-		initError = fmt.Errorf("failed to connect to PG: %w", err)
+		return nil, fmt.Errorf("failed to connect to PG: %w", err)
 	}
 
 	conn, err := dbPool.Acquire(context.Background())
 	if err != nil {
-		dbPool.Close() // не забываем закрыть, если Acquire не удался
-		initError = fmt.Errorf("failed to acquire connection: %w", err)
+		dbPool.Close()
+		return nil, fmt.Errorf("failed to acquire connection: %w", err)
 	}
 
-	pgSQL = &SQLConnection{
+	instance := &SQLConnection{
 		PgSQL:   dbPool,
 		PgConn:  conn,
 		Timeout: timeout,
 	}
-
-	if initError != nil || pgSQL == nil {
-		return nil, initError
-	}
+	pgSQL = instance
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	if err = pgSQL.PgSQL.Ping(ctx); err != nil {
-		return nil, fmt.Errorf(`failed ping: %w`, err)
+	if err = dbPool.Ping(ctx); err != nil {
+		return nil, fmt.Errorf("failed ping: %w", err)
 	}
 
-	return pgSQL, nil
+	return instance, nil
 }
 
 func (*SQLConnection) Ping() error {
