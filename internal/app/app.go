@@ -12,6 +12,7 @@ func Router() chi.Router {
 
 	r.Post("/", PostHandler)
 	r.Post("/api/shorten", PostShortenHandler)
+	r.Post("/api/shorten/batch", PostShortenHandlerBatch)
 	r.Get("/{id}", GetHandler)
 	r.Get("/ping", GetDBPing)
 	return r

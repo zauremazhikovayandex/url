@@ -152,6 +152,82 @@ func PostShortenHandler(w http.ResponseWriter, r *http.Request) {
 	logger.Logging.WriteToLog(timeStart, originalURL, "POST", http.StatusCreated, shortURL)
 }
 
+func PostShortenHandlerBatch(w http.ResponseWriter, r *http.Request) {
+	timeStart := time.Now()
+	storageType := config.AppConfig.StorageType
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Структуры запроса и ответа
+	type BatchRequestItem struct {
+		CorrelationID string `json:"correlation_id"`
+		OriginalURL   string `json:"original_url"`
+	}
+
+	type BatchResponseItem struct {
+		CorrelationID string `json:"correlation_id"`
+		ShortURL      string `json:"short_url"`
+	}
+
+	var requests []BatchRequestItem
+
+	// Проверка Content-Type
+	if r.Header.Get("Content-Type") != "application/json" {
+		http.Error(w, "Content-Type must be application/json", http.StatusBadRequest)
+		logger.Logging.WriteToLog(timeStart, "", "POST", http.StatusBadRequest, "Invalid Content-Type")
+		return
+	}
+
+	// Чтение и декодирование JSON-массива
+	if err := json.NewDecoder(r.Body).Decode(&requests); err != nil {
+		http.Error(w, "Invalid JSON payload", http.StatusBadRequest)
+		logger.Logging.WriteToLog(timeStart, "", "POST", http.StatusBadRequest, "Invalid JSON array")
+		return
+	}
+
+	var responses []BatchResponseItem
+
+	for _, item := range requests {
+		originalURL := strings.TrimSpace(item.OriginalURL)
+
+		if !isValidURL(originalURL) {
+			// Пропускаем или логируем ошибочный элемент (можно изменить поведение при необходимости)
+			logger.Logging.WriteToLog(timeStart, originalURL, "POST", http.StatusBadRequest, fmt.Sprintf("Invalid URL format for correlation_id=%s", item.CorrelationID))
+			continue
+		}
+
+		id, err := generateShortID(8)
+		if err != nil || id == "" {
+			logger.Logging.WriteToLog(timeStart, originalURL, "POST", http.StatusInternalServerError, fmt.Sprintf("Failed to generate ID for correlation_id=%s", item.CorrelationID))
+			continue
+		}
+
+		if storageType == "DB" {
+			err = postgres.InsertURL(ctx, id, originalURL)
+			if err != nil {
+				logger.Log.Error(&message.LogMessage{Message: fmt.Sprintf("Storage ERROR for correlation_id=%s: %s", item.CorrelationID, err)})
+				continue
+			}
+		} else {
+			storage.Store.Set(id, originalURL)
+		}
+
+		shortURL := fmt.Sprintf("%s/%s", config.AppConfig.BaseURL, id)
+
+		responses = append(responses, BatchResponseItem{
+			CorrelationID: item.CorrelationID,
+			ShortURL:      shortURL,
+		})
+		logger.Logging.WriteToLog(timeStart, originalURL, "POST", http.StatusCreated, shortURL)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	if err := json.NewEncoder(w).Encode(responses); err != nil {
+		logger.Log.Error(&message.LogMessage{Message: fmt.Sprintf("Failed to write batch response: %s", err)})
+	}
+}
+
 func GetHandler(w http.ResponseWriter, r *http.Request) {
 
 	timeStart := time.Now()
