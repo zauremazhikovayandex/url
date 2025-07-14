@@ -37,7 +37,7 @@ func isValidURL(rawURL string) bool {
 	return parsed.Scheme == "http" || parsed.Scheme == "https"
 }
 
-func PostHandler(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) PostHandler(w http.ResponseWriter, r *http.Request) {
 	timeStart := time.Now()
 	storageType := config.AppConfig.StorageType
 	ctx, cancel := context.WithCancel(context.Background())
@@ -68,11 +68,11 @@ func PostHandler(w http.ResponseWriter, r *http.Request) {
 	var shortURL string
 
 	if storageType == "DB" {
-		err = postgres.InsertURL(ctx, id, originalURL)
+		err = h.urlService.SaveURL(ctx, id, originalURL)
 		if err != nil {
 			if err.Error() == "duplicate_original_url" {
 				// Получаем уже существующий ID
-				existingID, err := postgres.SelectIDByOriginalURL(ctx, originalURL)
+				existingID, err := h.urlService.GetShortIDByOriginalURL(ctx, originalURL)
 				if err != nil {
 					http.Error(w, "Internal server error", http.StatusInternalServerError)
 					logger.Logging.WriteToLog(timeStart, originalURL, "POST", http.StatusInternalServerError, "Failed to fetch existing ID")
@@ -108,7 +108,7 @@ func PostHandler(w http.ResponseWriter, r *http.Request) {
 	logger.Logging.WriteToLog(timeStart, originalURL, "POST", http.StatusCreated, shortURL)
 }
 
-func PostShortenHandler(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) PostShortenHandler(w http.ResponseWriter, r *http.Request) {
 
 	timeStart := time.Now()
 	storageType := config.AppConfig.StorageType
@@ -156,11 +156,11 @@ func PostShortenHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if storageType == "DB" {
-		err = postgres.InsertURL(ctx, id, originalURL)
+		err = h.urlService.SaveURL(ctx, id, originalURL)
 		if err != nil {
 			if err.Error() == "duplicate_original_url" {
 				// Запрашиваем существующий ID
-				existingID, err := postgres.SelectIDByOriginalURL(ctx, originalURL)
+				existingID, err := h.urlService.GetShortIDByOriginalURL(ctx, originalURL)
 				if err != nil {
 					http.Error(w, "Internal server error", http.StatusInternalServerError)
 					logger.Logging.WriteToLog(timeStart, originalURL, "POST", http.StatusInternalServerError, "Failed to fetch existing ID")
@@ -193,7 +193,7 @@ func PostShortenHandler(w http.ResponseWriter, r *http.Request) {
 	logger.Logging.WriteToLog(timeStart, originalURL, "POST", http.StatusCreated, shortURL)
 }
 
-func PostShortenHandlerBatch(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) PostShortenHandlerBatch(w http.ResponseWriter, r *http.Request) {
 	timeStart := time.Now()
 	storageType := config.AppConfig.StorageType
 	ctx, cancel := context.WithCancel(context.Background())
@@ -244,7 +244,7 @@ func PostShortenHandlerBatch(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if storageType == "DB" {
-			err = postgres.InsertURL(ctx, id, originalURL)
+			err = h.urlService.SaveURL(ctx, id, originalURL)
 			if err != nil {
 				logger.Log.Error(&message.LogMessage{Message: fmt.Sprintf("Storage ERROR for correlation_id=%s: %s", item.CorrelationID, err)})
 				continue
@@ -269,7 +269,7 @@ func PostShortenHandlerBatch(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func GetHandler(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) GetHandler(w http.ResponseWriter, r *http.Request) {
 
 	timeStart := time.Now()
 	storageType := config.AppConfig.StorageType
@@ -284,7 +284,7 @@ func GetHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if storageType == "DB" {
-		originalURL, err := postgres.SelectURL(ctx, id)
+		originalURL, err := h.urlService.GetOriginalURL(ctx, id)
 		if err != nil || originalURL == "" {
 			http.Error(w, "URL not found", http.StatusBadRequest)
 			logger.Logging.WriteToLog(timeStart, "", "GET", http.StatusBadRequest, "URL not found")
@@ -306,7 +306,7 @@ func GetHandler(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func GzipMiddleware(next http.Handler) http.Handler {
+func (h *Handler) GzipMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ow := w
 
@@ -332,7 +332,7 @@ func GzipMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-func GetDBPing(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) GetDBPing(w http.ResponseWriter, r *http.Request) {
 	conn, err := postgres.SQLInstance()
 	if conn == nil || err != nil {
 		http.Error(w, "fail DB connection", http.StatusInternalServerError)

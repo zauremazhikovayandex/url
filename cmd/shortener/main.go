@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"github.com/zauremazhikovayandex/url/internal/app"
 	"github.com/zauremazhikovayandex/url/internal/config"
+	"github.com/zauremazhikovayandex/url/internal/db/postgres"
 	"github.com/zauremazhikovayandex/url/internal/db/storage"
 	"github.com/zauremazhikovayandex/url/internal/logger"
+	"github.com/zauremazhikovayandex/url/internal/services"
 	"log"
 	"net/http"
 	"os"
@@ -23,20 +25,30 @@ func main() {
 }
 
 func run() error {
+	//Init Config
 	config.InitConfig()
 
+	//Init File Storage
 	storage.InitStorage()
+
+	//Prepare DB
+	instance, err := postgres.SQLInstance()
+	if err != nil {
+		fmt.Println("DB prepare issues", err)
+	} else {
+		postgres.PrepareDB(instance)
+	}
 
 	//Init Logger
 	logger.New("info")
 
+	// Create server
 	addr := config.AppConfig.ServerAddr
 	fmt.Println("Running server on", addr)
-
-	// Create server
+	urlService := &services.PostgresURLService{}
 	srv := &http.Server{
 		Addr:    addr,
-		Handler: app.Router(),
+		Handler: app.InitHandlers(urlService),
 	}
 
 	// Gracefully shutdown

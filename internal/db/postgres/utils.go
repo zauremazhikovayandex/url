@@ -4,8 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/jackc/pgconn"
-	"github.com/jackc/pgerrcode"
+	"github.com/jackc/pgx/v4"
 	"github.com/zauremazhikovayandex/url/internal/logger"
 	"github.com/zauremazhikovayandex/url/internal/logger/message"
 )
@@ -16,7 +15,6 @@ func SelectURL(ctx context.Context, id string) (string, error) {
 		return "", err
 	}
 	db := instance.PgSQL
-	PrepareDB(instance)
 
 	timeoutCtx, cancel := context.WithTimeout(ctx, instance.Timeout)
 	defer cancel()
@@ -38,19 +36,18 @@ func InsertURL(ctx context.Context, id string, originalURL string) error {
 		return err
 	}
 	db := instance.PgSQL
-	PrepareDB(instance)
 
 	timeoutCtx, cancel := context.WithTimeout(ctx, instance.Timeout)
 	defer cancel()
 
-	query := "INSERT INTO urls (id, originalURL) VALUES ($1, $2)"
+	query := "INSERT INTO urls (id, originalURL) VALUES ($1, $2) ON CONFLICT (originalURL) DO NOTHING RETURNING id;"
 
-	_, err = db.Exec(timeoutCtx, query, id, originalURL)
+	var returnedID string
+	err = db.QueryRow(timeoutCtx, query, id, originalURL).Scan(&returnedID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return fmt.Errorf("duplicate_original_url")
+	}
 	if err != nil {
-		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
-			return fmt.Errorf("duplicate_original_url")
-		}
 		return err
 	}
 	return nil
@@ -62,7 +59,6 @@ func SelectIDByOriginalURL(ctx context.Context, originalURL string) (string, err
 		return "", err
 	}
 	db := instance.PgSQL
-	PrepareDB(instance)
 
 	timeoutCtx, cancel := context.WithTimeout(ctx, instance.Timeout)
 	defer cancel()
