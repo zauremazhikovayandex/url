@@ -93,6 +93,7 @@ func (h *Handler) PostHandler(w http.ResponseWriter, r *http.Request) {
 		err = h.urlService.SaveURL(ctx, id, originalURL)
 		if err != nil {
 			resolveURLInsertError(ctx, w, r, h, timeStart, originalURL, err)
+			return
 		}
 		shortURL = fmt.Sprintf("%s/%s", config.AppConfig.BaseURL, id)
 	} else {
@@ -161,6 +162,7 @@ func (h *Handler) PostShortenHandler(w http.ResponseWriter, r *http.Request) {
 		err = h.urlService.SaveURL(ctx, id, originalURL)
 		if err != nil {
 			resolveURLInsertError(ctx, w, r, h, timeStart, originalURL, err)
+			return
 		}
 	} else {
 		storage.Store.Set(id, originalURL)
