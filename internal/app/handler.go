@@ -44,20 +44,17 @@ func resolveURLInsertError(ctx context.Context, w http.ResponseWriter, r *http.R
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			logger.Logging.WriteToLog(timeStart, originalURL, "POST", http.StatusInternalServerError, "Failed to fetch existing ID")
-			return
 		}
 		shortURL := fmt.Sprintf("%s/%s", config.AppConfig.BaseURL, existingID)
 		w.Header().Set("Content-Type", "text/plain")
 		w.WriteHeader(http.StatusConflict)
 		_, _ = w.Write([]byte(shortURL))
 		logger.Logging.WriteToLog(timeStart, originalURL, "POST", http.StatusConflict, "Duplicate URL")
-		return
 	}
 
 	// Неизвестная ошибка — 500
 	logger.Log.Error(&message.LogMessage{Message: fmt.Sprintf("Storage ERROR: %s", err)})
 	http.Error(w, "Internal server error", http.StatusInternalServerError)
-	return
 }
 
 func (h *Handler) PostHandler(w http.ResponseWriter, r *http.Request) {
