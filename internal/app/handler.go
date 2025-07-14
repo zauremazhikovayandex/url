@@ -40,16 +40,26 @@ func isValidURL(rawURL string) bool {
 func resolveURLInsertError(ctx context.Context, w http.ResponseWriter, r *http.Request, h *Handler, timeStart time.Time, originalURL string, err error) {
 	if err.Error() == "duplicate_original_url" {
 		// Получаем уже существующий ID
-		existingID, err := h.urlService.GetShortIDByOriginalURL(ctx, originalURL)
-		if err != nil {
+		existingID, getErr := h.urlService.GetShortIDByOriginalURL(ctx, originalURL)
+		if getErr != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			logger.Logging.WriteToLog(timeStart, originalURL, "POST", http.StatusInternalServerError, "Failed to fetch existing ID")
 			return
 		}
 		shortURL := fmt.Sprintf("%s/%s", config.AppConfig.BaseURL, existingID)
-		w.Header().Set("Content-Type", "text/plain")
-		w.WriteHeader(http.StatusConflict)
-		_, _ = w.Write([]byte(shortURL))
+
+		// JSON или plain text в зависимости от запроса
+		accept := r.Header.Get("Accept")
+		if strings.Contains(accept, "application/json") {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusConflict)
+			_ = json.NewEncoder(w).Encode(map[string]string{"result": shortURL})
+		} else {
+			w.Header().Set("Content-Type", "text/plain")
+			w.WriteHeader(http.StatusConflict)
+			_, _ = w.Write([]byte(shortURL))
+		}
+
 		logger.Logging.WriteToLog(timeStart, originalURL, "POST", http.StatusConflict, "Duplicate URL")
 		return
 	}
