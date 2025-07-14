@@ -37,7 +37,7 @@ func isValidURL(rawURL string) bool {
 	return parsed.Scheme == "http" || parsed.Scheme == "https"
 }
 
-func resolveError(ctx context.Context, w http.ResponseWriter, r *http.Request, h *Handler, timeStart time.Time, originalURL string, err error) {
+func resolveURLInsertError(ctx context.Context, w http.ResponseWriter, r *http.Request, h *Handler, timeStart time.Time, originalURL string, err error) {
 	if err.Error() == "duplicate_original_url" {
 		// Получаем уже существующий ID
 		existingID, err := h.urlService.GetShortIDByOriginalURL(ctx, originalURL)
@@ -93,7 +93,7 @@ func (h *Handler) PostHandler(w http.ResponseWriter, r *http.Request) {
 	if storageType == "DB" {
 		err = h.urlService.SaveURL(ctx, id, originalURL)
 		if err != nil {
-			resolveError(ctx, w, r, h, timeStart, originalURL, err)
+			resolveURLInsertError(ctx, w, r, h, timeStart, originalURL, err)
 		}
 		shortURL = fmt.Sprintf("%s/%s", config.AppConfig.BaseURL, id)
 	} else {
@@ -161,7 +161,7 @@ func (h *Handler) PostShortenHandler(w http.ResponseWriter, r *http.Request) {
 	if storageType == "DB" {
 		err = h.urlService.SaveURL(ctx, id, originalURL)
 		if err != nil {
-			resolveError(ctx, w, r, h, timeStart, originalURL, err)
+			resolveURLInsertError(ctx, w, r, h, timeStart, originalURL, err)
 		}
 	} else {
 		storage.Store.Set(id, originalURL)
