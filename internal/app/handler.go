@@ -37,6 +37,29 @@ func isValidURL(rawURL string) bool {
 	return parsed.Scheme == "http" || parsed.Scheme == "https"
 }
 
+func resolveError(ctx context.Context, w http.ResponseWriter, r *http.Request, h *Handler, timeStart time.Time, originalURL string, err error) {
+	if err.Error() == "duplicate_original_url" {
+		// Получаем уже существующий ID
+		existingID, err := h.urlService.GetShortIDByOriginalURL(ctx, originalURL)
+		if err != nil {
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			logger.Logging.WriteToLog(timeStart, originalURL, "POST", http.StatusInternalServerError, "Failed to fetch existing ID")
+			return
+		}
+		shortURL := fmt.Sprintf("%s/%s", config.AppConfig.BaseURL, existingID)
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(http.StatusConflict)
+		_, _ = w.Write([]byte(shortURL))
+		logger.Logging.WriteToLog(timeStart, originalURL, "POST", http.StatusConflict, "Duplicate URL")
+		return
+	}
+
+	// Неизвестная ошибка — 500
+	logger.Log.Error(&message.LogMessage{Message: fmt.Sprintf("Storage ERROR: %s", err)})
+	http.Error(w, "Internal server error", http.StatusInternalServerError)
+	return
+}
+
 func (h *Handler) PostHandler(w http.ResponseWriter, r *http.Request) {
 	timeStart := time.Now()
 	storageType := config.AppConfig.StorageType
@@ -70,28 +93,8 @@ func (h *Handler) PostHandler(w http.ResponseWriter, r *http.Request) {
 	if storageType == "DB" {
 		err = h.urlService.SaveURL(ctx, id, originalURL)
 		if err != nil {
-			if err.Error() == "duplicate_original_url" {
-				// Получаем уже существующий ID
-				existingID, err := h.urlService.GetShortIDByOriginalURL(ctx, originalURL)
-				if err != nil {
-					http.Error(w, "Internal server error", http.StatusInternalServerError)
-					logger.Logging.WriteToLog(timeStart, originalURL, "POST", http.StatusInternalServerError, "Failed to fetch existing ID")
-					return
-				}
-				shortURL = fmt.Sprintf("%s/%s", config.AppConfig.BaseURL, existingID)
-				w.Header().Set("Content-Type", "text/plain")
-				w.WriteHeader(http.StatusConflict)
-				_, _ = w.Write([]byte(shortURL))
-				logger.Logging.WriteToLog(timeStart, originalURL, "POST", http.StatusConflict, "Duplicate URL")
-				return
-			}
-
-			// Неизвестная ошибка — 500
-			logger.Log.Error(&message.LogMessage{Message: fmt.Sprintf("Storage ERROR: %s", err)})
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
-			return
+			resolveError(ctx, w, r, h, timeStart, originalURL, err)
 		}
-
 		shortURL = fmt.Sprintf("%s/%s", config.AppConfig.BaseURL, id)
 	} else {
 		storage.Store.Set(id, originalURL)
@@ -158,26 +161,7 @@ func (h *Handler) PostShortenHandler(w http.ResponseWriter, r *http.Request) {
 	if storageType == "DB" {
 		err = h.urlService.SaveURL(ctx, id, originalURL)
 		if err != nil {
-			if err.Error() == "duplicate_original_url" {
-				// Запрашиваем существующий ID
-				existingID, err := h.urlService.GetShortIDByOriginalURL(ctx, originalURL)
-				if err != nil {
-					http.Error(w, "Internal server error", http.StatusInternalServerError)
-					logger.Logging.WriteToLog(timeStart, originalURL, "POST", http.StatusInternalServerError, "Failed to fetch existing ID")
-					return
-				}
-				shortURL := fmt.Sprintf("%s/%s", config.AppConfig.BaseURL, existingID)
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusConflict)
-				json.NewEncoder(w).Encode(ResponsePayload{Result: shortURL})
-				logger.Logging.WriteToLog(timeStart, originalURL, "POST", http.StatusConflict, "Duplicate URL")
-				return
-			}
-
-			// Другая ошибка
-			logger.Log.Error(&message.LogMessage{Message: fmt.Sprintf("Storage ERROR: %s", err)})
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
-			return
+			resolveError(ctx, w, r, h, timeStart, originalURL, err)
 		}
 	} else {
 		storage.Store.Set(id, originalURL)
