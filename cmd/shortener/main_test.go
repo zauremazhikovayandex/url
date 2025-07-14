@@ -11,6 +11,7 @@ import (
 	"github.com/zauremazhikovayandex/url/internal/config"
 	"github.com/zauremazhikovayandex/url/internal/db/storage"
 	"github.com/zauremazhikovayandex/url/internal/logger"
+	"github.com/zauremazhikovayandex/url/internal/services"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -39,10 +40,11 @@ func TestWebhook(t *testing.T) {
 		},
 	}
 	config.InitConfig()
-	storage.InitStorage()
 	logger.New("info")
+	storage.InitStorage()
 
-	srv := httptest.NewServer(app.Router())
+	urlService := &services.PostgresURLService{}
+	srv := httptest.NewServer(app.InitHandlers(urlService))
 	bURL := srv.URL
 	defer srv.Close()
 
@@ -117,7 +119,8 @@ func TestWebhook(t *testing.T) {
 
 func TestGzipCompression(t *testing.T) {
 	// Запускаем сервер с middleware
-	srv := httptest.NewServer(app.Router())
+	urlService := &services.PostgresURLService{}
+	srv := httptest.NewServer(app.InitHandlers(urlService))
 	defer srv.Close()
 
 	type RequestPayload struct {

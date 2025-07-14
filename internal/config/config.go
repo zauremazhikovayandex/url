@@ -9,9 +9,17 @@ import (
 var AppConfig *Config
 
 type Config struct {
-	ServerAddr  string
-	BaseURL     string
-	FileStorage string
+	ServerAddr     string
+	BaseURL        string
+	UseFileStorage string
+	FileStorage    string
+	PGConfig       *PostgresConfig
+	StorageType    string
+}
+
+type PostgresConfig struct {
+	DBConnection string
+	DBTimeout    int
 }
 
 func InitConfig() {
@@ -19,12 +27,14 @@ func InitConfig() {
 	serverAddrFlag := flag.String("a", "", "port to run server")
 	baseURLFlag := flag.String("b", "", "base URL for short links")
 	fileStorageFlag := flag.String("f", "", "file storage")
+	dbConnectionFlag := flag.String("d", "", "postgres connection")
 	flag.Parse()
 
 	// Устанавливаем значения по умолчанию
 	serverAddr := ":8080"
 	baseURL := "http://localhost:8080"
-	fileStorage := "url_history.json"
+	fileStorage := ""
+	dbConnection := ""
 
 	// Переопределяем флагами
 	if *serverAddrFlag != "" {
@@ -35,6 +45,9 @@ func InitConfig() {
 	}
 	if *fileStorageFlag != "" {
 		fileStorage = *fileStorageFlag
+	}
+	if *dbConnectionFlag != "" {
+		dbConnection = *dbConnectionFlag
 	}
 
 	// Окружением (имеет самый высокий приоритет)
@@ -47,12 +60,31 @@ func InitConfig() {
 	if env := os.Getenv("FILE_STORAGE_PATH"); env != "" {
 		fileStorage = env
 	}
+	if env := os.Getenv("DATABASE_DSN"); env != "" {
+		dbConnection = env
+	}
+
+	storageType := "Memory"
+	if dbConnection != "" {
+		storageType = "DB"
+	} else if fileStorage != "" {
+		storageType = "File"
+	}
 
 	AppConfig = &Config{
 		ServerAddr:  serverAddr,
 		BaseURL:     baseURL,
 		FileStorage: fileStorage,
+		PGConfig: &PostgresConfig{
+			DBConnection: dbConnection,
+			DBTimeout:    10,
+		},
+		StorageType: storageType,
 	}
 
-	fmt.Println("💾 Using file storage path:", AppConfig.FileStorage) // отладка
+	fmt.Println("Storage type:", storageType)
+
+	if storageType == "File" {
+		fmt.Println("💾 Using file storage path:", AppConfig.FileStorage) // отладка
+	}
 }
