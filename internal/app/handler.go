@@ -315,11 +315,7 @@ func (h *Handler) GetHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) GetUserURLs(w http.ResponseWriter, r *http.Request) {
-	userID, err := auth.GetUserIDFromRequest(r)
-	if err != nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
+	userID := auth.EnsureAuthCookie(w, r)
 
 	urls, err := h.urlService.GetURLsByUserID(r.Context(), userID)
 	if err != nil {

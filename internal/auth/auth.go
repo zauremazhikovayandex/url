@@ -3,7 +3,6 @@ package auth
 import (
 	"crypto/rand"
 	"encoding/base64"
-	"errors"
 	"net/http"
 	"time"
 
@@ -31,25 +30,6 @@ func GenerateToken(userID string) (string, error) {
 	})
 
 	return token.SignedString([]byte(SecretKey))
-}
-
-// Считываем и валидируем JWT из куки
-func GetUserIDFromRequest(r *http.Request) (string, error) {
-	c, err := r.Cookie(CookieName)
-	if err != nil {
-		return "", errors.New("no auth cookie")
-	}
-
-	tokenStr := c.Value
-	claims := &Claims{}
-	token, err := jwt.ParseWithClaims(tokenStr, claims, func(t *jwt.Token) (interface{}, error) {
-		return []byte(SecretKey), nil
-	})
-
-	if err != nil || !token.Valid {
-		return "", errors.New("invalid token")
-	}
-	return claims.UserID, nil
 }
 
 // Устанавливаем куку, если её нет. Если есть возвращаем UserID
