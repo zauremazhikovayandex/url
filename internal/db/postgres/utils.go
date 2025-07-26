@@ -9,6 +9,11 @@ import (
 	"github.com/zauremazhikovayandex/url/internal/logger/message"
 )
 
+type URL struct {
+	ID          string
+	OriginalURL string
+}
+
 func SelectURL(ctx context.Context, id string) (string, error) {
 	instance, err := SQLInstance()
 	if err != nil {
@@ -30,7 +35,7 @@ func SelectURL(ctx context.Context, id string) (string, error) {
 	return originalURL, nil
 }
 
-func InsertURL(ctx context.Context, id string, originalURL string) error {
+func InsertURL(ctx context.Context, id string, originalURL string, userID string) error {
 	instance, err := SQLInstance()
 	if err != nil {
 		return err
@@ -40,10 +45,10 @@ func InsertURL(ctx context.Context, id string, originalURL string) error {
 	timeoutCtx, cancel := context.WithTimeout(ctx, instance.Timeout)
 	defer cancel()
 
-	query := "INSERT INTO urls (id, originalURL) VALUES ($1, $2) ON CONFLICT (originalURL) DO NOTHING RETURNING id;"
+	query := "INSERT INTO urls (id, originalURL, userID) VALUES ($1, $2, $3) ON CONFLICT (originalURL) DO NOTHING RETURNING id;"
 
 	var returnedID string
-	err = db.QueryRow(timeoutCtx, query, id, originalURL).Scan(&returnedID)
+	err = db.QueryRow(timeoutCtx, query, id, originalURL, userID).Scan(&returnedID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return fmt.Errorf("duplicate_original_url")
 	}
@@ -73,11 +78,39 @@ func SelectIDByOriginalURL(ctx context.Context, originalURL string) (string, err
 	return id, nil
 }
 
+func SelectURLsByUser(ctx context.Context, userID string) ([]URL, error) {
+	instance, err := SQLInstance()
+	if err != nil {
+		return nil, err
+	}
+	db := instance.PgSQL
+	ctx, cancel := context.WithTimeout(ctx, instance.Timeout)
+	defer cancel()
+
+	query := "SELECT id, originalURL FROM urls WHERE userID = $1"
+	rows, err := db.Query(ctx, query, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []URL
+	for rows.Next() {
+		var u URL
+		if err := rows.Scan(&u.ID, &u.OriginalURL); err != nil {
+			return nil, err
+		}
+		results = append(results, u)
+	}
+	return results, nil
+}
+
 func CreateTables(db *SQLConnection) error {
 	ctx := context.Background()
 	_, err := db.PgSQL.Exec(ctx,
 		`CREATE TABLE IF NOT EXISTS urls (
 			id TEXT,
+			userID TEXT,
 			originalURL TEXT UNIQUE
 		)`)
 	if err != nil {

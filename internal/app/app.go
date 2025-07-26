@@ -20,6 +20,7 @@ func InitHandlers(urlService services.URLService) *chi.Mux {
 	r.Post("/api/shorten", h.PostShortenHandler)
 	r.Post("/api/shorten/batch", h.PostShortenHandlerBatch)
 	r.Get("/{id}", h.GetHandler)
+	r.Get("/api/user/urls", h.GetUserURLs)
 	r.Get("/ping", h.GetDBPing)
 
 	return r
