@@ -16,12 +16,16 @@ func (s *PostgresURLService) GetOriginalURL(ctx context.Context, id string) (str
 	return postgres.SelectURL(ctx, id)
 }
 
+func (s *PostgresURLService) GetURLsByUserID(ctx context.Context, userID string) ([]postgres.URL, error) {
+	return postgres.SelectURLsByUser(ctx, userID)
+}
+
 func (s *PostgresURLService) GetShortIDByOriginalURL(ctx context.Context, originalURL string) (string, error) {
 	return postgres.SelectIDByOriginalURL(ctx, originalURL)
 }
 
-func (s *PostgresURLService) SaveURL(ctx context.Context, id, originalURL string) error {
-	err := postgres.InsertURL(ctx, id, originalURL)
+func (s *PostgresURLService) SaveURL(ctx context.Context, id, originalURL string, userID string) error {
+	err := postgres.InsertURL(ctx, id, originalURL, userID)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {

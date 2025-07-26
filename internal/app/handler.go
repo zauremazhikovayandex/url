@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/go-chi/chi/v5"
+	"github.com/zauremazhikovayandex/url/internal/auth"
 	"github.com/zauremazhikovayandex/url/internal/config"
 	"github.com/zauremazhikovayandex/url/internal/db/postgres"
 	"github.com/zauremazhikovayandex/url/internal/db/storage"
@@ -19,6 +20,11 @@ import (
 	"strings"
 	"time"
 )
+
+type URLPair struct {
+	ShortURL    string `json:"short_url"`
+	OriginalURL string `json:"original_url"`
+}
 
 func generateShortID(n int) (string, error) {
 	b := make([]byte, n)
@@ -70,6 +76,9 @@ func resolveURLInsertError(ctx context.Context, w http.ResponseWriter, r *http.R
 }
 
 func (h *Handler) PostHandler(w http.ResponseWriter, r *http.Request) {
+
+	userID := auth.EnsureAuthCookie(w, r)
+
 	timeStart := time.Now()
 	storageType := config.AppConfig.StorageType
 	ctx, cancel := context.WithCancel(context.Background())
@@ -100,7 +109,7 @@ func (h *Handler) PostHandler(w http.ResponseWriter, r *http.Request) {
 	var shortURL string
 
 	if storageType == "DB" {
-		err = h.urlService.SaveURL(ctx, id, originalURL)
+		err = h.urlService.SaveURL(ctx, id, originalURL, userID)
 		if err != nil {
 			resolveURLInsertError(ctx, w, r, h, timeStart, originalURL, err)
 			return
@@ -122,6 +131,8 @@ func (h *Handler) PostHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) PostShortenHandler(w http.ResponseWriter, r *http.Request) {
+
+	userID := auth.EnsureAuthCookie(w, r)
 
 	timeStart := time.Now()
 	storageType := config.AppConfig.StorageType
@@ -169,7 +180,7 @@ func (h *Handler) PostShortenHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if storageType == "DB" {
-		err = h.urlService.SaveURL(ctx, id, originalURL)
+		err = h.urlService.SaveURL(ctx, id, originalURL, userID)
 		if err != nil {
 			resolveURLInsertError(ctx, w, r, h, timeStart, originalURL, err)
 			return
@@ -189,6 +200,8 @@ func (h *Handler) PostShortenHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) PostShortenHandlerBatch(w http.ResponseWriter, r *http.Request) {
+	userID := auth.EnsureAuthCookie(w, r)
+
 	timeStart := time.Now()
 	storageType := config.AppConfig.StorageType
 	ctx, cancel := context.WithCancel(context.Background())
@@ -239,7 +252,7 @@ func (h *Handler) PostShortenHandlerBatch(w http.ResponseWriter, r *http.Request
 		}
 
 		if storageType == "DB" {
-			err = h.urlService.SaveURL(ctx, id, originalURL)
+			err = h.urlService.SaveURL(ctx, id, originalURL, userID)
 			if err != nil {
 				logger.Log.Error(&message.LogMessage{Message: fmt.Sprintf("Storage ERROR for correlation_id=%s: %s", item.CorrelationID, err)})
 				continue
@@ -299,6 +312,36 @@ func (h *Handler) GetHandler(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, originalURL, http.StatusTemporaryRedirect)
 	}
 
+}
+
+func (h *Handler) GetUserURLs(w http.ResponseWriter, r *http.Request) {
+	userID, err := auth.GetUserIDFromRequest(r)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	urls, err := h.urlService.GetURLsByUserID(r.Context(), userID)
+	if err != nil {
+		http.Error(w, "Server error", http.StatusInternalServerError)
+		return
+	}
+
+	if len(urls) == 0 {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	var response []URLPair
+	for _, u := range urls {
+		response = append(response, URLPair{
+			ShortURL:    config.AppConfig.BaseURL + "/" + u.ID,
+			OriginalURL: u.OriginalURL,
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
 }
 
 func (h *Handler) GzipMiddleware(next http.Handler) http.Handler {
