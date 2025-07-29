@@ -16,9 +16,11 @@ import (
 	"github.com/zauremazhikovayandex/url/internal/logger"
 	"github.com/zauremazhikovayandex/url/internal/logger/message"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -395,49 +397,124 @@ func (h *Handler) DeleteUserURLs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// fan-out
-	idCh := make(chan string)
-	go func() {
-		defer close(idCh)
-		for _, id := range ids {
-			idCh <- id
-		}
-	}()
+	doneCh := make(chan struct{})
+	defer close(doneCh)
 
-	// fan-in с batch update (СИНХРОННО)
-	const batchSize = 20
-	const batchTimeout = 50 * time.Millisecond
+	// 1. generator: передаёт все ID в канал
+	idCh := generator(doneCh, ids)
 
-	var (
-		batch []string
-		timer = time.NewTimer(batchTimeout)
-	)
-	defer timer.Stop()
+	// 2. fan-out: запускаем 10 воркеров на удаление
+	workerChs := fanOut(doneCh, idCh, func(batch []string) error {
+		return h.urlService.BatchDeleteForUser(context.Background(), batch, userID)
+	})
 
-	flushAndReset := func() {
-		if len(batch) > 0 {
-			_ = h.urlService.BatchDeleteForUser(context.Background(), batch, userID)
-			batch = batch[:0]
-		}
-		timer.Reset(batchTimeout)
-	}
+	// 3. fan-in: собираем ошибки (если есть)
+	errCh := fanIn(doneCh, workerChs...)
 
-loop:
-	for {
-		select {
-		case id, ok := <-idCh:
-			if !ok {
-				break loop
-			}
-			batch = append(batch, id)
-			if len(batch) >= batchSize {
-				flushAndReset()
-			}
-		case <-timer.C:
-			flushAndReset()
+	// 4. ждём завершения всех воркеров и проверяем ошибки
+	for err := range errCh {
+		if err != nil {
+			log.Printf("Batch delete error: %v", err)
 		}
 	}
-	flushAndReset() // финальный сброс
 
 	w.WriteHeader(http.StatusAccepted)
+}
+
+func generator(doneCh <-chan struct{}, input []string) chan string {
+	out := make(chan string)
+	go func() {
+		defer close(out)
+		for _, id := range input {
+			select {
+			case <-doneCh:
+				return
+			case out <- id:
+			}
+		}
+	}()
+	return out
+}
+
+func fanOut(
+	doneCh <-chan struct{},
+	inputCh chan string,
+	deleteBatch func(batch []string) error,
+) []chan error {
+	numWorkers := 10
+	channels := make([]chan error, numWorkers)
+
+	for i := 0; i < numWorkers; i++ {
+		out := make(chan error)
+		channels[i] = out
+
+		go func(out chan error) {
+			defer close(out)
+
+			const batchSize = 20
+			var batch []string
+
+			timer := time.NewTimer(100 * time.Millisecond)
+			defer timer.Stop()
+
+			flush := func() {
+				if len(batch) > 0 {
+					err := deleteBatch(batch)
+					out <- err
+					batch = batch[:0]
+				}
+			}
+
+			for {
+				select {
+				case <-doneCh:
+					return
+				case id, ok := <-inputCh:
+					if !ok {
+						flush()
+						return
+					}
+					batch = append(batch, id)
+					if len(batch) >= batchSize {
+						flush()
+						if !timer.Stop() {
+							<-timer.C
+						}
+						timer.Reset(100 * time.Millisecond)
+					}
+				case <-timer.C:
+					flush()
+					timer.Reset(100 * time.Millisecond)
+				}
+			}
+		}(out)
+	}
+
+	return channels
+}
+
+func fanIn(doneCh <-chan struct{}, channels ...chan error) chan error {
+	out := make(chan error)
+	var wg sync.WaitGroup
+
+	for _, ch := range channels {
+		chCopy := ch
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for err := range chCopy {
+				select {
+				case <-doneCh:
+					return
+				case out <- err:
+				}
+			}
+		}()
+	}
+
+	go func() {
+		wg.Wait()
+		close(out)
+	}()
+	return out
 }
