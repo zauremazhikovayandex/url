@@ -282,9 +282,7 @@ func (h *Handler) PostShortenHandlerBatch(w http.ResponseWriter, r *http.Request
 }
 
 func (h *Handler) GetHandler(w http.ResponseWriter, r *http.Request) {
-
 	timeStart := time.Now()
-	storageType := config.AppConfig.StorageType
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -295,32 +293,20 @@ func (h *Handler) GetHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if storageType == "DB" {
-		originalURL, err := h.urlService.GetOriginalURL(ctx, id)
-		if err != nil {
-			if errors.Is(err, postgres.ErrURLDeleted) {
-				http.Error(w, "URL deleted", http.StatusGone)
-				logger.Logging.WriteToLog(timeStart, "", "GET", http.StatusBadRequest, "URL deleted")
-			} else {
-				http.Error(w, "URL not found", http.StatusBadRequest)
-				logger.Logging.WriteToLog(timeStart, "", "GET", http.StatusBadRequest, "URL not found")
-			}
+	originalURL, err := h.urlService.GetOriginalURL(ctx, id)
+	if err != nil {
+		if errors.Is(err, postgres.ErrURLDeleted) {
+			http.Error(w, "URL deleted", http.StatusGone)
+			logger.Logging.WriteToLog(timeStart, "", "GET", http.StatusGone, "URL deleted")
 			return
 		}
-		logger.Logging.WriteToLog(timeStart, originalURL, "GET", http.StatusTemporaryRedirect, id)
-		http.Redirect(w, r, originalURL, http.StatusTemporaryRedirect)
-
-	} else {
-		originalURL, ok := storage.Store.Get(id)
-		if !ok || originalURL == "" {
-			http.Error(w, "URL not found", http.StatusBadRequest)
-			logger.Logging.WriteToLog(timeStart, "", "GET", http.StatusBadRequest, "URL not found")
-			return
-		}
-		logger.Logging.WriteToLog(timeStart, originalURL, "GET", http.StatusTemporaryRedirect, id)
-		http.Redirect(w, r, originalURL, http.StatusTemporaryRedirect)
+		http.Error(w, "URL not found", http.StatusBadRequest)
+		logger.Logging.WriteToLog(timeStart, "", "GET", http.StatusBadRequest, "URL not found")
+		return
 	}
 
+	logger.Logging.WriteToLog(timeStart, originalURL, "GET", http.StatusTemporaryRedirect, id)
+	http.Redirect(w, r, originalURL, http.StatusTemporaryRedirect)
 }
 
 func (h *Handler) GetUserURLs(w http.ResponseWriter, r *http.Request) {
@@ -401,25 +387,26 @@ func (h *Handler) DeleteUserURLs(w http.ResponseWriter, r *http.Request) {
 	doneCh := make(chan struct{})
 	defer close(doneCh)
 
-	// 1. generator: передаёт все ID в канал
 	idCh := generator(doneCh, ids)
-
-	// 2. fan-out: запускаем 10 воркеров на удаление
 	workerChs := fanOut(doneCh, idCh, func(batch []string) error {
 		return h.urlService.BatchDeleteForUser(context.Background(), batch, userID)
 	})
-
-	// 3. fan-in: собираем ошибки (если есть)
 	errCh := fanIn(doneCh, workerChs...)
 
-	// 4. ждём завершения всех воркеров и проверяем ошибки
+	// Ждём завершения всех воркеров
+	allDone := true
 	for err := range errCh {
 		if err != nil {
+			allDone = false
 			log.Printf("Batch delete error: %v", err)
 		}
 	}
 
-	w.WriteHeader(http.StatusAccepted)
+	if allDone {
+		w.WriteHeader(http.StatusAccepted)
+	} else {
+		http.Error(w, "One or more deletions failed", http.StatusInternalServerError)
+	}
 }
 
 func generator(doneCh <-chan struct{}, input []string) chan string {
@@ -455,9 +442,6 @@ func fanOut(
 			const batchSize = 20
 			var batch []string
 
-			timer := time.NewTimer(100 * time.Millisecond)
-			defer timer.Stop()
-
 			flush := func() {
 				if len(batch) > 0 {
 					err := deleteBatch(batch)
@@ -465,6 +449,9 @@ func fanOut(
 					batch = batch[:0]
 				}
 			}
+
+			ticker := time.NewTicker(100 * time.Millisecond)
+			defer ticker.Stop()
 
 			for {
 				select {
@@ -478,14 +465,9 @@ func fanOut(
 					batch = append(batch, id)
 					if len(batch) >= batchSize {
 						flush()
-						if !timer.Stop() {
-							<-timer.C
-						}
-						timer.Reset(100 * time.Millisecond)
 					}
-				case <-timer.C:
+				case <-ticker.C:
 					flush()
-					timer.Reset(100 * time.Millisecond)
 				}
 			}
 		}(out)
