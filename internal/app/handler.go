@@ -19,7 +19,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -396,99 +395,51 @@ func (h *Handler) DeleteUserURLs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	done := make(chan struct{})
+	// фан-аут + фан-ин: создаём поток ID
 	idCh := make(chan string)
-
-	// Закроем канал после заполнения
 	go func() {
 		defer close(idCh)
 		for _, id := range ids {
-			select {
-			case <-done:
-				return
-			case idCh <- id:
-			}
+			idCh <- id
 		}
 	}()
 
-	// fan-out воркеры
-	workerCount := 5
-	var wg sync.WaitGroup
-	outChs := make([]chan string, workerCount)
-
-	for i := 0; i < workerCount; i++ {
-		out := make(chan string)
-		outChs[i] = out
-		wg.Add(1)
-
-		go func(out chan<- string) {
-			defer wg.Done()
-			defer close(out)
-
-			for id := range idCh {
-				select {
-				case <-done:
-					return
-				case out <- id:
-				}
-			}
-		}(out)
-	}
-
-	// fan-in: объединение всех воркеров в один выходной канал
-	mergedCh := make(chan string)
+	// запуск одного batch обработчика (fan-in)
 	go func() {
-		defer close(mergedCh)
-		var mergeWg sync.WaitGroup
-		for _, ch := range outChs {
-			mergeWg.Add(1)
-			go func(c <-chan string) {
-				defer mergeWg.Done()
-				for id := range c {
-					select {
-					case <-done:
-						return
-					case mergedCh <- id:
-					}
-				}
-			}(ch)
-		}
-		mergeWg.Wait()
-	}()
+		const batchSize = 20
+		const batchTimeout = 100 * time.Millisecond
 
-	// Один батчер: читает из mergedCh и отправляет пачки в БД
-	go func() {
-		batch := make([]string, 0, 20)
-		timer := time.NewTimer(500 * time.Millisecond)
+		var (
+			batch []string
+			timer = time.NewTimer(batchTimeout)
+		)
 		defer timer.Stop()
 
-		send := func() {
-			if len(batch) == 0 {
-				return
+		flush := func() {
+			if len(batch) > 0 {
+				_ = h.urlService.BatchDeleteForUser(context.Background(), batch, userID)
+				batch = batch[:0]
 			}
-			if err := h.urlService.BatchDeleteForUser(context.Background(), batch, userID); err != nil {
-				logger.Log.Error(&message.LogMessage{Message: fmt.Sprintf("Batch delete failed: %v", err)})
-			}
-			batch = batch[:0]
 		}
 
 		for {
 			select {
-			case <-done:
-				send()
-				return
-			case id, ok := <-mergedCh:
+			case id, ok := <-idCh:
 				if !ok {
-					send()
+					flush()
 					return
 				}
 				batch = append(batch, id)
-				if len(batch) >= 20 {
-					send()
+				if len(batch) >= batchSize {
+					flush()
+					if !timer.Stop() {
+						<-timer.C
+					}
+					timer.Reset(batchTimeout)
 				}
 			case <-timer.C:
-				send()
-				timer.Reset(500 * time.Millisecond)
+				flush()
+				timer.Reset(batchTimeout)
 			}
 		}
 	}()
