@@ -395,7 +395,7 @@ func (h *Handler) DeleteUserURLs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// фан-аут + фан-ин: создаём поток ID
+	// fan-out
 	idCh := make(chan string)
 	go func() {
 		defer close(idCh)
@@ -404,45 +404,40 @@ func (h *Handler) DeleteUserURLs(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	// запуск одного batch обработчика (fan-in)
-	go func() {
-		const batchSize = 20
-		const batchTimeout = 100 * time.Millisecond
+	// fan-in с batch update (СИНХРОННО)
+	const batchSize = 20
+	const batchTimeout = 50 * time.Millisecond
 
-		var (
-			batch []string
-			timer = time.NewTimer(batchTimeout)
-		)
-		defer timer.Stop()
+	var (
+		batch []string
+		timer = time.NewTimer(batchTimeout)
+	)
+	defer timer.Stop()
 
-		flush := func() {
-			if len(batch) > 0 {
-				_ = h.urlService.BatchDeleteForUser(context.Background(), batch, userID)
-				batch = batch[:0]
-			}
+	flushAndReset := func() {
+		if len(batch) > 0 {
+			_ = h.urlService.BatchDeleteForUser(context.Background(), batch, userID)
+			batch = batch[:0]
 		}
+		timer.Reset(batchTimeout)
+	}
 
-		for {
-			select {
-			case id, ok := <-idCh:
-				if !ok {
-					flush()
-					return
-				}
-				batch = append(batch, id)
-				if len(batch) >= batchSize {
-					flush()
-					if !timer.Stop() {
-						<-timer.C
-					}
-					timer.Reset(batchTimeout)
-				}
-			case <-timer.C:
-				flush()
-				timer.Reset(batchTimeout)
+loop:
+	for {
+		select {
+		case id, ok := <-idCh:
+			if !ok {
+				break loop
 			}
+			batch = append(batch, id)
+			if len(batch) >= batchSize {
+				flushAndReset()
+			}
+		case <-timer.C:
+			flushAndReset()
 		}
-	}()
+	}
+	flushAndReset() // финальный сброс
 
 	w.WriteHeader(http.StatusAccepted)
 }

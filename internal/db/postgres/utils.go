@@ -136,29 +136,6 @@ func PrepareDB(db *SQLConnection) {
 	}
 }
 
-func DeleteURL(ctx context.Context, id string) error {
-	instance, err := SQLInstance()
-	if err != nil {
-		return err
-	}
-	db := instance.PgSQL
-
-	timeoutCtx, cancel := context.WithTimeout(ctx, instance.Timeout)
-	defer cancel()
-
-	query := "UPDATE urls SET deleted = 1 WHERE id = $1 RETURNING id;"
-
-	var returnedID string
-	err = db.QueryRow(timeoutCtx, query, id).Scan(&returnedID)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return fmt.Errorf("url_not_found")
-	}
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
 func BatchDeleteURLs(ctx context.Context, ids []string, userID string) error {
 	if len(ids) == 0 {
 		return nil
