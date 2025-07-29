@@ -104,10 +104,12 @@ func SelectURLsByUser(ctx context.Context, userID string) ([]URL, error) {
 	var results []URL
 	for rows.Next() {
 		var u URL
-		if err := rows.Scan(&u.ID, &u.OriginalURL); err != nil {
+		if err := rows.Scan(&u.ID, &u.OriginalURL, &u.Deleted); err != nil {
 			return nil, err
 		}
-		results = append(results, u)
+		if u.Deleted == 0 {
+			results = append(results, u)
+		}
 	}
 	return results, nil
 }
