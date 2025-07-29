@@ -9,5 +9,6 @@ type URLService interface {
 	GetOriginalURL(ctx context.Context, id string) (string, error)
 	GetURLsByUserID(ctx context.Context, userID string) ([]postgres.URL, error)
 	GetShortIDByOriginalURL(ctx context.Context, originalURL string) (string, error)
-	SaveURL(ctx context.Context, id, originalURL string, userID string) error
+	SaveURL(ctx context.Context, id string, originalURL string, userID string) error
+	BatchDeleteForUser(ctx context.Context, ids []string, userID string) error
 }

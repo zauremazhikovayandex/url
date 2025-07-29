@@ -24,7 +24,7 @@ func (s *PostgresURLService) GetShortIDByOriginalURL(ctx context.Context, origin
 	return postgres.SelectIDByOriginalURL(ctx, originalURL)
 }
 
-func (s *PostgresURLService) SaveURL(ctx context.Context, id, originalURL string, userID string) error {
+func (s *PostgresURLService) SaveURL(ctx context.Context, id string, originalURL string, userID string) error {
 	err := postgres.InsertURL(ctx, id, originalURL, userID)
 	if err != nil {
 		var pgErr *pgconn.PgError
@@ -34,4 +34,8 @@ func (s *PostgresURLService) SaveURL(ctx context.Context, id, originalURL string
 		return err
 	}
 	return nil
+}
+
+func (s *PostgresURLService) BatchDeleteForUser(ctx context.Context, ids []string, userID string) error {
+	return postgres.BatchDeleteURLs(ctx, ids, userID)
 }

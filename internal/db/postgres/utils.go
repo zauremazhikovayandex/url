@@ -7,12 +7,16 @@ import (
 	"github.com/jackc/pgx/v4"
 	"github.com/zauremazhikovayandex/url/internal/logger"
 	"github.com/zauremazhikovayandex/url/internal/logger/message"
+	"strings"
 )
 
 type URL struct {
 	ID          string
 	OriginalURL string
+	Deleted     int
 }
+
+var ErrURLDeleted = errors.New("url_deleted")
 
 func SelectURL(ctx context.Context, id string) (string, error) {
 	instance, err := SQLInstance()
@@ -24,15 +28,18 @@ func SelectURL(ctx context.Context, id string) (string, error) {
 	timeoutCtx, cancel := context.WithTimeout(ctx, instance.Timeout)
 	defer cancel()
 
-	query := "SELECT originalURL FROM urls WHERE id = $1"
+	query := "SELECT id, originalURL, deleted FROM urls WHERE id = $1"
 
-	var originalURL string
-	err = db.QueryRow(timeoutCtx, query, id).Scan(&originalURL)
+	var u URL
+	err = db.QueryRow(timeoutCtx, query, id).Scan(&u.ID, &u.OriginalURL, &u.Deleted)
 	if err != nil {
 		return "", err
 	}
+	if u.Deleted == 1 {
+		return u.OriginalURL, ErrURLDeleted
+	}
 
-	return originalURL, nil
+	return u.OriginalURL, nil
 }
 
 func InsertURL(ctx context.Context, id string, originalURL string, userID string) error {
@@ -87,7 +94,7 @@ func SelectURLsByUser(ctx context.Context, userID string) ([]URL, error) {
 	ctx, cancel := context.WithTimeout(ctx, instance.Timeout)
 	defer cancel()
 
-	query := "SELECT id, originalURL FROM urls WHERE userID = $1"
+	query := "SELECT id, originalURL, deleted FROM urls WHERE userID = $1"
 	rows, err := db.Query(ctx, query, userID)
 	if err != nil {
 		return nil, err
@@ -111,7 +118,8 @@ func CreateTables(db *SQLConnection) error {
 		`CREATE TABLE IF NOT EXISTS urls (
 			id TEXT,
 			userID TEXT,
-			originalURL TEXT UNIQUE
+			originalURL TEXT UNIQUE,
+			deleted INTEGER DEFAULT 0
 		)`)
 	if err != nil {
 		return err
@@ -124,4 +132,57 @@ func PrepareDB(db *SQLConnection) {
 	if err != nil {
 		logger.Log.Error(&message.LogMessage{Message: fmt.Sprintf("DB CreateTables ERROR: %s", err)})
 	}
+}
+
+func DeleteURL(ctx context.Context, id string) error {
+	instance, err := SQLInstance()
+	if err != nil {
+		return err
+	}
+	db := instance.PgSQL
+
+	timeoutCtx, cancel := context.WithTimeout(ctx, instance.Timeout)
+	defer cancel()
+
+	query := "UPDATE urls SET deleted = 1 WHERE id = $1 RETURNING id;"
+
+	var returnedID string
+	err = db.QueryRow(timeoutCtx, query, id).Scan(&returnedID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return fmt.Errorf("url_not_found")
+	}
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func BatchDeleteURLs(ctx context.Context, ids []string, userID string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+
+	instance, err := SQLInstance()
+	if err != nil {
+		return err
+	}
+	db := instance.PgSQL
+
+	args := []interface{}{userID}
+	params := make([]string, len(ids))
+	for i, id := range ids {
+		args = append(args, id)
+		params[i] = fmt.Sprintf("$%d", i+2)
+	}
+
+	query := fmt.Sprintf(`
+		UPDATE urls SET deleted = 1
+		WHERE userID = $1 AND id IN (%s)
+	`, strings.Join(params, ", "))
+
+	ctxWithTimeout, cancel := context.WithTimeout(ctx, instance.Timeout)
+	defer cancel()
+
+	_, err = db.Exec(ctxWithTimeout, query, args...)
+	return err
 }

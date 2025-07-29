@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/go-chi/chi/v5"
 	"github.com/zauremazhikovayandex/url/internal/auth"
@@ -18,6 +19,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -293,9 +295,14 @@ func (h *Handler) GetHandler(w http.ResponseWriter, r *http.Request) {
 
 	if storageType == "DB" {
 		originalURL, err := h.urlService.GetOriginalURL(ctx, id)
-		if err != nil || originalURL == "" {
-			http.Error(w, "URL not found", http.StatusBadRequest)
-			logger.Logging.WriteToLog(timeStart, "", "GET", http.StatusBadRequest, "URL not found")
+		if err != nil {
+			if errors.Is(err, postgres.ErrURLDeleted) {
+				http.Error(w, "URL deleted", http.StatusGone)
+				logger.Logging.WriteToLog(timeStart, "", "GET", http.StatusBadRequest, "URL deleted")
+			} else {
+				http.Error(w, "URL not found", http.StatusBadRequest)
+				logger.Logging.WriteToLog(timeStart, "", "GET", http.StatusBadRequest, "URL not found")
+			}
 			return
 		}
 		logger.Logging.WriteToLog(timeStart, originalURL, "GET", http.StatusTemporaryRedirect, id)
@@ -373,4 +380,118 @@ func (h *Handler) GetDBPing(w http.ResponseWriter, r *http.Request) {
 	} else {
 		w.WriteHeader(http.StatusOK)
 	}
+}
+
+func (h *Handler) DeleteUserURLs(w http.ResponseWriter, r *http.Request) {
+	userID := auth.EnsureAuthCookie(w, r)
+
+	if r.Header.Get("Content-Type") != "application/json" {
+		http.Error(w, "Content-Type must be application/json", http.StatusBadRequest)
+		return
+	}
+
+	var ids []string
+	if err := json.NewDecoder(r.Body).Decode(&ids); err != nil || len(ids) == 0 {
+		http.Error(w, "Invalid JSON payload", http.StatusBadRequest)
+		return
+	}
+
+	done := make(chan struct{})
+	idCh := make(chan string)
+
+	// Закроем канал после заполнения
+	go func() {
+		defer close(idCh)
+		for _, id := range ids {
+			select {
+			case <-done:
+				return
+			case idCh <- id:
+			}
+		}
+	}()
+
+	// fan-out воркеры
+	workerCount := 5
+	var wg sync.WaitGroup
+	outChs := make([]chan string, workerCount)
+
+	for i := 0; i < workerCount; i++ {
+		out := make(chan string)
+		outChs[i] = out
+		wg.Add(1)
+
+		go func(out chan<- string) {
+			defer wg.Done()
+			defer close(out)
+
+			for id := range idCh {
+				select {
+				case <-done:
+					return
+				case out <- id:
+				}
+			}
+		}(out)
+	}
+
+	// fan-in: объединение всех воркеров в один выходной канал
+	mergedCh := make(chan string)
+	go func() {
+		defer close(mergedCh)
+		var mergeWg sync.WaitGroup
+		for _, ch := range outChs {
+			mergeWg.Add(1)
+			go func(c <-chan string) {
+				defer mergeWg.Done()
+				for id := range c {
+					select {
+					case <-done:
+						return
+					case mergedCh <- id:
+					}
+				}
+			}(ch)
+		}
+		mergeWg.Wait()
+	}()
+
+	// Один батчер: читает из mergedCh и отправляет пачки в БД
+	go func() {
+		batch := make([]string, 0, 20)
+		timer := time.NewTimer(500 * time.Millisecond)
+		defer timer.Stop()
+
+		send := func() {
+			if len(batch) == 0 {
+				return
+			}
+			if err := h.urlService.BatchDeleteForUser(context.Background(), batch, userID); err != nil {
+				logger.Log.Error(&message.LogMessage{Message: fmt.Sprintf("Batch delete failed: %v", err)})
+			}
+			batch = batch[:0]
+		}
+
+		for {
+			select {
+			case <-done:
+				send()
+				return
+			case id, ok := <-mergedCh:
+				if !ok {
+					send()
+					return
+				}
+				batch = append(batch, id)
+				if len(batch) >= 20 {
+					send()
+				}
+			case <-timer.C:
+				send()
+				timer.Reset(500 * time.Millisecond)
+			}
+		}
+	}()
+
+	w.WriteHeader(http.StatusAccepted)
 }
