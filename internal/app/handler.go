@@ -456,6 +456,9 @@ func fanOut(
 			flush := func() {
 				if len(batch) > 0 {
 					err := deleteBatch(batch)
+					if err != nil {
+						log.Printf("deleteBatch error for batch=%v: %v", batch, err)
+					}
 					out <- err
 					batch = batch[:0]
 				}

@@ -7,6 +7,7 @@ import (
 	"github.com/jackc/pgx/v4"
 	"github.com/zauremazhikovayandex/url/internal/logger"
 	"github.com/zauremazhikovayandex/url/internal/logger/message"
+	"log"
 	"strings"
 )
 
@@ -149,10 +150,17 @@ func BatchDeleteURLs(ctx context.Context, ids []string, userID string) error {
 	db := instance.PgSQL
 
 	args := []interface{}{userID}
-	params := make([]string, len(ids))
+	params := make([]string, 0, len(ids))
 	for i, id := range ids {
+		if id == "" {
+			continue
+		}
 		args = append(args, id)
-		params[i] = fmt.Sprintf("$%d", i+2)
+		params = append(params, fmt.Sprintf("$%d", i+2))
+	}
+
+	if len(params) == 0 {
+		return nil // нечего обновлять
 	}
 
 	query := fmt.Sprintf(`
@@ -164,5 +172,8 @@ func BatchDeleteURLs(ctx context.Context, ids []string, userID string) error {
 	defer cancel()
 
 	_, err = db.Exec(ctxWithTimeout, query, args...)
+	if err != nil {
+		log.Printf("Batch delete failed: %v", err)
+	}
 	return err
 }
