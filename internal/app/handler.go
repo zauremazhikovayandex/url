@@ -283,6 +283,7 @@ func (h *Handler) PostShortenHandlerBatch(w http.ResponseWriter, r *http.Request
 
 func (h *Handler) GetHandler(w http.ResponseWriter, r *http.Request) {
 	timeStart := time.Now()
+	storageType := config.AppConfig.StorageType
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -293,20 +294,30 @@ func (h *Handler) GetHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	originalURL, err := h.urlService.GetOriginalURL(ctx, id)
-	if err != nil {
-		if errors.Is(err, postgres.ErrURLDeleted) {
-			http.Error(w, "URL deleted", http.StatusGone)
-			logger.Logging.WriteToLog(timeStart, "", "GET", http.StatusGone, "URL deleted")
+	if storageType == "DB" {
+		originalURL, err := h.urlService.GetOriginalURL(ctx, id)
+		if err != nil {
+			if errors.Is(err, postgres.ErrURLDeleted) {
+				http.Error(w, "URL deleted", http.StatusGone)
+				logger.Logging.WriteToLog(timeStart, "", "GET", http.StatusGone, "URL deleted")
+				return
+			}
+			http.Error(w, "URL not found", http.StatusBadRequest)
+			logger.Logging.WriteToLog(timeStart, "", "GET", http.StatusBadRequest, "URL not found")
 			return
 		}
-		http.Error(w, "URL not found", http.StatusBadRequest)
-		logger.Logging.WriteToLog(timeStart, "", "GET", http.StatusBadRequest, "URL not found")
-		return
+		logger.Logging.WriteToLog(timeStart, originalURL, "GET", http.StatusTemporaryRedirect, id)
+		http.Redirect(w, r, originalURL, http.StatusTemporaryRedirect)
+	} else {
+		originalURL, ok := storage.Store.Get(id)
+		if !ok || originalURL == "" {
+			http.Error(w, "URL not found", http.StatusBadRequest)
+			logger.Logging.WriteToLog(timeStart, "", "GET", http.StatusBadRequest, "URL not found")
+			return
+		}
+		logger.Logging.WriteToLog(timeStart, originalURL, "GET", http.StatusTemporaryRedirect, id)
+		http.Redirect(w, r, originalURL, http.StatusTemporaryRedirect)
 	}
-
-	logger.Logging.WriteToLog(timeStart, originalURL, "GET", http.StatusTemporaryRedirect, id)
-	http.Redirect(w, r, originalURL, http.StatusTemporaryRedirect)
 }
 
 func (h *Handler) GetUserURLs(w http.ResponseWriter, r *http.Request) {
