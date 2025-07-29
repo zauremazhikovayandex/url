@@ -17,6 +17,7 @@ type URL struct {
 }
 
 var ErrURLDeleted = errors.New("url_deleted")
+var ErrDuplicateOriginalURL = errors.New("duplicate_original_url")
 
 func SelectURL(ctx context.Context, id string) (string, error) {
 	instance, err := SQLInstance()
@@ -57,7 +58,7 @@ func InsertURL(ctx context.Context, id string, originalURL string, userID string
 	var returnedID string
 	err = db.QueryRow(timeoutCtx, query, id, originalURL, userID).Scan(&returnedID)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return fmt.Errorf("duplicate_original_url")
+		return ErrDuplicateOriginalURL
 	}
 	if err != nil {
 		return err

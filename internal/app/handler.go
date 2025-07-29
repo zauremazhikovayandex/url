@@ -47,7 +47,7 @@ func isValidURL(rawURL string) bool {
 }
 
 func resolveURLInsertError(ctx context.Context, w http.ResponseWriter, r *http.Request, h *Handler, timeStart time.Time, originalURL string, err error) {
-	if err.Error() == "duplicate_original_url" {
+	if errors.Is(err, postgres.ErrDuplicateOriginalURL) {
 		// Получаем уже существующий ID
 		existingID, getErr := h.urlService.GetShortIDByOriginalURL(ctx, originalURL)
 		if getErr != nil {
