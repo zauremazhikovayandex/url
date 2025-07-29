@@ -50,14 +50,15 @@ func resolveURLInsertError(ctx context.Context, w http.ResponseWriter, r *http.R
 	if errors.Is(err, postgres.ErrDuplicateOriginalURL) {
 		// Получаем уже существующий ID
 		existingID, getErr := h.urlService.GetShortIDByOriginalURL(ctx, originalURL)
-		if getErr != nil {
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
-			logger.Logging.WriteToLog(timeStart, originalURL, "POST", http.StatusInternalServerError, "Failed to fetch existing ID")
+		if getErr != nil || existingID == "" {
+			// если ID не найден — логируем и всё равно отдаём 409, но с минимальным текстом
+			http.Error(w, "Conflict", http.StatusConflict)
+			logger.Logging.WriteToLog(timeStart, originalURL, "POST", http.StatusConflict, "Duplicate URL but no ID")
 			return
 		}
+
 		shortURL := fmt.Sprintf("%s/%s", config.AppConfig.BaseURL, existingID)
 
-		// JSON или plain text в зависимости от запроса
 		accept := r.Header.Get("Accept")
 		if strings.Contains(accept, "application/json") {
 			w.Header().Set("Content-Type", "application/json")
@@ -73,7 +74,7 @@ func resolveURLInsertError(ctx context.Context, w http.ResponseWriter, r *http.R
 		return
 	}
 
-	// Неизвестная ошибка — 500
+	// если ошибка — не duplicate, логируем как 500
 	logger.Log.Error(&message.LogMessage{Message: fmt.Sprintf("Storage ERROR: %s", err)})
 	http.Error(w, "Internal server error", http.StatusInternalServerError)
 }
