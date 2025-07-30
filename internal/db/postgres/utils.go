@@ -53,7 +53,7 @@ func InsertURL(ctx context.Context, id string, originalURL string, userID string
 	timeoutCtx, cancel := context.WithTimeout(ctx, instance.Timeout)
 	defer cancel()
 
-	query := "INSERT INTO urls (id, originalURL, userID) VALUES ($1, $2, $3) ON CONFLICT (originalURL) DO NOTHING RETURNING id;"
+	query := "INSERT INTO urls (id, originalURL, userID) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING RETURNING id;"
 
 	var returnedID string
 	err = db.QueryRow(timeoutCtx, query, id, originalURL, userID).Scan(&returnedID)
