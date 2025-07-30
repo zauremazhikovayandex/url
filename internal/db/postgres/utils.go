@@ -174,7 +174,6 @@ func BatchDeleteURLs(ctx context.Context, ids []string, userID string) error {
 	}
 	db := instance.PgSQL
 
-	// Формируем плейсхолдеры ($2, $3, ...) и аргументы
 	args := make([]interface{}, 0, len(ids)+1)
 	args = append(args, userID)
 

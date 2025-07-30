@@ -465,7 +465,8 @@ func (h *Handler) DeleteUserURLs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.urlService.BatchDelete(ctx, batch, userID); err != nil {
-		http.Error(w, "Failed to mark URLs as deleted", http.StatusInternalServerError)
+		logger.Log.Error(&message.LogMessage{Message: fmt.Sprintf("Failed to mark URLs as deleted: %s", err)})
+		http.Error(w, fmt.Sprintf("Failed to mark URLs as deleted: %s", err), http.StatusInternalServerError)
 		return
 	}
 
