@@ -431,7 +431,7 @@ func (h *Handler) DeleteUserURLs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Fan-out
-	workers := 5
+	workers := 20
 	var chans []<-chan string
 	for i := 0; i < workers; i++ {
 		chans = append(chans, worker(idCh))
