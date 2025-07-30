@@ -37,3 +37,7 @@ func (s *PostgresURLService) SaveURL(ctx context.Context, id string, originalURL
 func (s *PostgresURLService) DeleteForUser(ctx context.Context, id string, userID string) error {
 	return postgres.DeleteURL(ctx, id, userID)
 }
+
+func (s *PostgresURLService) BatchDelete(ctx context.Context, ids []string, userID string) error {
+	return postgres.BatchDeleteURLs(ctx, ids, userID)
+}

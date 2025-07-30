@@ -8,6 +8,7 @@ import (
 	"github.com/zauremazhikovayandex/url/internal/logger"
 	"github.com/zauremazhikovayandex/url/internal/logger/message"
 	"log"
+	"strings"
 )
 
 type URL struct {
@@ -159,5 +160,36 @@ func DeleteURL(ctx context.Context, id string, userID string) error {
 	if err != nil {
 		log.Printf("Batch delete failed: %v", err)
 	}
+	return err
+}
+
+func BatchDeleteURLs(ctx context.Context, ids []string, userID string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+
+	instance, err := SQLInstance()
+	if err != nil {
+		return err
+	}
+	db := instance.PgSQL
+
+	args := make([]interface{}, 0, len(ids)+1)
+	args = append(args, userID)
+	placeholders := ""
+
+	for i, id := range ids {
+		args = append(args, id)
+		placeholders += fmt.Sprintf("$%d,", i+2)
+	}
+
+	placeholders = strings.TrimRight(placeholders, ",")
+
+	query := fmt.Sprintf("UPDATE urls SET deleted = 1 WHERE userID = $1 AND id IN (%s)", placeholders)
+
+	timeoutCtx, cancel := context.WithTimeout(ctx, instance.Timeout)
+	defer cancel()
+
+	_, err = db.Exec(timeoutCtx, query, args...)
 	return err
 }
