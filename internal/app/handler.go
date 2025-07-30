@@ -16,7 +16,6 @@ import (
 	"github.com/zauremazhikovayandex/url/internal/logger"
 	"github.com/zauremazhikovayandex/url/internal/logger/message"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -395,24 +394,26 @@ func (h *Handler) DeleteUserURLs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// сигнальный канал для завершения горутин
 	doneCh := make(chan struct{})
+	// закрываем его при завершении программы
 	defer close(doneCh)
 
-	idCh := generator(doneCh, ids)
-	workerChs := fanOut(doneCh, idCh, func(batch []string) error {
-		return h.urlService.BatchDeleteForUser(context.Background(), batch, userID)
-	})
-	errCh := fanIn(doneCh, workerChs...)
+	// канал с данными
+	inputCh := generator(doneCh, ids)
 
-	// Ждём завершения всех воркеров
+	// получаем слайс каналов из 10 рабочих add
+	channels := fanOut(h, userID, doneCh, inputCh)
+
+	// а теперь объединяем десять каналов в один
+	addResultCh := fanIn(doneCh, channels...)
+
 	allDone := true
-	for err := range errCh {
-		if err != nil {
+	for res := range addResultCh {
+		if res == 0 {
 			allDone = false
-			log.Printf("Batch delete error: %v", err)
 		}
 	}
-
 	if allDone {
 		w.WriteHeader(http.StatusAccepted)
 	} else {
@@ -420,98 +421,118 @@ func (h *Handler) DeleteUserURLs(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func generator(doneCh <-chan struct{}, input []string) chan string {
-	out := make(chan string)
+// generator возвращает канал с данными
+func generator(doneCh chan struct{}, input []string) chan string {
+	// канал, в который будем отправлять данные из слайса
+	inputCh := make(chan string)
+
+	// горутина, в которой отправляем в канал  inputCh данные
 	go func() {
-		defer close(out)
-		for _, id := range input {
+		// как отправители закрываем канал, когда всё отправим
+		defer close(inputCh)
+
+		// перебираем все данные в слайсе
+		for _, data := range input {
 			select {
+			// если doneCh закрыт, сразу выходим из горутины
 			case <-doneCh:
 				return
-			case out <- id:
+			// если doneCh не закрыт, кидаем в канал inputCh данные data
+			case inputCh <- data:
 			}
 		}
 	}()
-	return out
+
+	// возвращаем канал для данных
+	return inputCh
 }
 
-func fanOut(
-	doneCh <-chan struct{},
-	inputCh chan string,
-	deleteBatch func(batch []string) error,
-) []chan error {
-	numWorkers := 10
-	channels := make([]chan error, numWorkers)
+// fanOut принимает канал данных, порождает 10 горутин
+func fanOut(h *Handler, userID string, doneCh chan struct{}, inputCh chan string) []chan int {
+	// количество горутин add
+	numWorkers := 30
+	// каналы, в которые отправляются результаты
+	channels := make([]chan int, numWorkers)
 
 	for i := 0; i < numWorkers; i++ {
-		out := make(chan error)
-		channels[i] = out
-
-		go func(out chan error) {
-			defer close(out)
-
-			const batchSize = 20
-			var batch []string
-
-			flush := func() {
-				if len(batch) > 0 {
-					err := deleteBatch(batch)
-					if err != nil {
-						log.Printf("deleteBatch error for batch=%v: %v", batch, err)
-					}
-					out <- err
-					batch = batch[:0]
-				}
-			}
-
-			ticker := time.NewTicker(100 * time.Millisecond)
-			defer ticker.Stop()
-
-			for {
-				select {
-				case <-doneCh:
-					return
-				case id, ok := <-inputCh:
-					if !ok {
-						flush()
-						return
-					}
-					batch = append(batch, id)
-					if len(batch) >= batchSize {
-						flush()
-					}
-				case <-ticker.C:
-					flush()
-				}
-			}
-		}(out)
+		// получаем канал из горутины add
+		addResultCh := deleteUrl(h, userID, doneCh, inputCh)
+		// отправляем его в слайс каналов
+		channels[i] = addResultCh
 	}
-
+	// возвращаем слайс каналов
 	return channels
 }
 
-func fanIn(doneCh <-chan struct{}, channels ...chan error) chan error {
-	out := make(chan error)
+func deleteUrl(h *Handler, userID string, doneCh chan struct{}, inputCh chan string) chan int {
+	// канал с результатом
+	addRes := make(chan int)
+
+	// горутина, в которой добавляем к значению из inputCh единицу и отправляем результат в addRes
+	go func() {
+		// закрываем канал, когда горутина завершается
+		defer close(addRes)
+
+		// берём из канала inputCh значения, которые надо изменить
+		for data := range inputCh {
+			err := h.urlService.DeleteForUser(context.Background(), data, userID)
+			result := 1
+			if err != nil {
+				result = 0
+			}
+			select {
+			// если канал doneCh закрылся, выходим из горутины
+			case <-doneCh:
+				return
+			// если doneCh не закрыт, отправляем результат вычисления в канал результата
+			case addRes <- result:
+			}
+		}
+	}()
+	// возвращаем канал для результатов вычислений
+	return addRes
+}
+
+// fanIn объединяет несколько каналов resultChs в один.
+func fanIn(doneCh chan struct{}, resultChs ...chan int) chan int {
+	// конечный выходной канал в который отправляем данные из всех каналов из слайса, назовём его результирующим
+	finalCh := make(chan int)
+
+	// понадобится для ожидания всех горутин
 	var wg sync.WaitGroup
 
-	for _, ch := range channels {
-		chCopy := ch
+	// перебираем все входящие каналы
+	for _, ch := range resultChs {
+		// в горутину передавать переменную цикла нельзя, поэтому делаем так
+		chClosure := ch
+
+		// инкрементируем счётчик горутин, которые нужно подождать
 		wg.Add(1)
+
 		go func() {
+			// откладываем сообщение о том, что горутина завершилась
 			defer wg.Done()
-			for err := range chCopy {
+
+			// получаем данные из канала
+			for data := range chClosure {
 				select {
+				// выходим из горутины, если канал закрылся
 				case <-doneCh:
 					return
-				case out <- err:
+				// если не закрылся, отправляем данные в конечный выходной канал
+				case finalCh <- data:
 				}
 			}
 		}()
 	}
 
 	go func() {
+		// ждём завершения всех горутин
 		wg.Wait()
-		close(out)
+		// когда все горутины завершились, закрываем результирующий канал
+		close(finalCh)
 	}()
-	return out
+
+	// возвращаем результирующий канал
+	return finalCh
 }
