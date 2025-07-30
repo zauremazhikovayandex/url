@@ -450,7 +450,7 @@ func generator(doneCh chan struct{}, input []string) chan string {
 // fanOut принимает канал данных, порождает 10 горутин
 func fanOut(h *Handler, userID string, doneCh chan struct{}, inputCh chan string) []chan int {
 	// количество горутин add
-	numWorkers := 30
+	numWorkers := 20
 	// каналы, в которые отправляются результаты
 	channels := make([]chan int, numWorkers)
 
