@@ -174,22 +174,21 @@ func BatchDeleteURLs(ctx context.Context, ids []string, userID string) error {
 	}
 	db := instance.PgSQL
 
+	// Формируем плейсхолдеры ($2, $3, ...) и аргументы
 	args := make([]interface{}, 0, len(ids)+1)
 	args = append(args, userID)
-	placeholders := ""
 
+	placeholders := make([]string, 0, len(ids))
 	for i, id := range ids {
 		args = append(args, id)
-		placeholders += fmt.Sprintf("$%d,", i+2)
+		placeholders = append(placeholders, fmt.Sprintf("$%d", i+2))
 	}
 
-	placeholders = strings.TrimRight(placeholders, ",")
+	query := fmt.Sprintf(`UPDATE urls SET deleted = 1 WHERE userID = $1 AND id IN (%s)`, strings.Join(placeholders, ", "))
 
-	query := fmt.Sprintf("UPDATE urls SET deleted = 1 WHERE userID = $1 AND id IN (%s)", placeholders)
-
-	timeoutCtx, cancel := context.WithTimeout(ctx, instance.Timeout)
+	ctxWithTimeout, cancel := context.WithTimeout(ctx, instance.Timeout)
 	defer cancel()
 
-	_, err = db.Exec(timeoutCtx, query, args...)
+	_, err = db.Exec(ctxWithTimeout, query, args...)
 	return err
 }
