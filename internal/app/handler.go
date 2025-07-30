@@ -456,7 +456,7 @@ func fanOut(h *Handler, userID string, doneCh chan struct{}, inputCh chan string
 
 	for i := 0; i < numWorkers; i++ {
 		// получаем канал из горутины add
-		addResultCh := deleteUrl(h, userID, doneCh, inputCh)
+		addResultCh := deleteURL(h, userID, doneCh, inputCh)
 		// отправляем его в слайс каналов
 		channels[i] = addResultCh
 	}
@@ -464,7 +464,7 @@ func fanOut(h *Handler, userID string, doneCh chan struct{}, inputCh chan string
 	return channels
 }
 
-func deleteUrl(h *Handler, userID string, doneCh chan struct{}, inputCh chan string) chan int {
+func deleteURL(h *Handler, userID string, doneCh chan struct{}, inputCh chan string) chan int {
 	// канал с результатом
 	addRes := make(chan int)
 

@@ -150,7 +150,7 @@ func DeleteURL(ctx context.Context, id string, userID string) error {
 
 	args := []interface{}{userID, id}
 
-	query := fmt.Sprintf(`UPDATE urls SET deleted = 1 WHERE userID = $1 AND id = $2`)
+	query := "UPDATE urls SET deleted = 1 WHERE userID = $1 AND id = $2"
 
 	ctxWithTimeout, cancel := context.WithTimeout(ctx, instance.Timeout)
 	defer cancel()
