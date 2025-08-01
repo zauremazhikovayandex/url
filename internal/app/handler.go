@@ -80,7 +80,7 @@ func resolveURLInsertError(ctx context.Context, w http.ResponseWriter, r *http.R
 
 func (h *Handler) PostHandler(w http.ResponseWriter, r *http.Request) {
 
-	userID := auth.EnsureAuthCookie(w, r)
+	userID := auth.GetUserID(r.Context())
 
 	timeStart := time.Now()
 	storageType := config.AppConfig.StorageType
@@ -135,7 +135,7 @@ func (h *Handler) PostHandler(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) PostShortenHandler(w http.ResponseWriter, r *http.Request) {
 
-	userID := auth.EnsureAuthCookie(w, r)
+	userID := auth.GetUserID(r.Context())
 
 	timeStart := time.Now()
 	storageType := config.AppConfig.StorageType
@@ -203,7 +203,7 @@ func (h *Handler) PostShortenHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) PostShortenHandlerBatch(w http.ResponseWriter, r *http.Request) {
-	userID := auth.EnsureAuthCookie(w, r)
+	userID := auth.GetUserID(r.Context())
 
 	timeStart := time.Now()
 	storageType := config.AppConfig.StorageType
@@ -320,7 +320,7 @@ func (h *Handler) GetHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) GetUserURLs(w http.ResponseWriter, r *http.Request) {
-	userID := auth.EnsureAuthCookie(w, r)
+	userID := auth.GetUserID(r.Context())
 
 	urls, err := h.urlService.GetURLsByUserID(r.Context(), userID)
 	if err != nil {
@@ -381,7 +381,7 @@ func (h *Handler) GetDBPing(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) DeleteUserURLs(w http.ResponseWriter, r *http.Request) {
-	userID := auth.EnsureAuthCookie(w, r)
+	userID := auth.GetUserID(r.Context())
 
 	if r.Header.Get("Content-Type") != "application/json" {
 		http.Error(w, "Content-Type must be application/json", http.StatusBadRequest)
