@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"time"
 )
 
 var AppConfig *Config
@@ -15,6 +16,9 @@ type Config struct {
 	FileStorage    string
 	PGConfig       *PostgresConfig
 	StorageType    string
+	JWTSecretKey   string
+	JWTTokenExp    time.Duration
+	JWTCookieName  string
 }
 
 type PostgresConfig struct {
@@ -79,7 +83,10 @@ func InitConfig() {
 			DBConnection: dbConnection,
 			DBTimeout:    10,
 		},
-		StorageType: storageType,
+		StorageType:   storageType,
+		JWTSecretKey:  "supersecretkey",
+		JWTTokenExp:   time.Hour * 3,
+		JWTCookieName: "auth_token",
 	}
 
 	fmt.Println("Storage type:", storageType)

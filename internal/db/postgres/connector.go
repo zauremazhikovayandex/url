@@ -21,6 +21,11 @@ var (
 )
 
 func SQLInstance() (*SQLConnection, error) {
+
+	if pgSQL != nil {
+		return pgSQL, nil
+	}
+
 	cfg := config.AppConfig.PGConfig
 	timeout := time.Duration(cfg.DBTimeout) * time.Second
 
