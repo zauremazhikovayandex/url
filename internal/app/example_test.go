@@ -40,8 +40,8 @@ func routerForGet(h *Handler) http.Handler {
 	return r
 }
 
-// ExamplePostHandler демонстрирует создание короткой ссылки через POST-тело (text/plain).
-func ExamplePostHandler() {
+// ExampleHandler_PostHandler демонстрирует создание короткой ссылки через POST-тело (text/plain).
+func ExampleHandler_PostHandler() {
 	h := setupMemoryApp()
 
 	body := "https://example.com/hello"
@@ -62,8 +62,8 @@ func ExamplePostHandler() {
 	// (пусто — пример демонстрационный, без assert-а по выводу)
 }
 
-// ExamplePostShortenHandler демонстрирует создание короткой ссылки через JSON (application/json).
-func ExamplePostShortenHandler() {
+// ExampleHandler_PostShortenHandler демонстрирует создание короткой ссылки через JSON (application/json).
+func ExampleHandler_PostShortenHandler() {
 	h := setupMemoryApp()
 
 	payload := map[string]string{"url": "https://golang.org"}
@@ -85,8 +85,8 @@ func ExamplePostShortenHandler() {
 	// (пусто — демонстрационный пример)
 }
 
-// ExamplePostShortenHandler_invalid демонстрирует валидационную ошибку на неверный URL с JSON.
-func ExamplePostShortenHandler_invalid() {
+// ExampleHandler_PostShortenHandler_invalid демонстрирует валидационную ошибку на неверный URL с JSON.
+func ExampleHandler_PostShortenHandler_invalid() {
 	h := setupMemoryApp()
 
 	payload := map[string]string{"url": "not a url"}
@@ -111,8 +111,8 @@ func ExamplePostShortenHandler_invalid() {
 	// Invalid URL format
 }
 
-// ExamplePostShortenHandlerBatch демонстрирует пакетное создание ссылок.
-func ExamplePostShortenHandlerBatch() {
+// ExampleHandler_PostShortenHandlerBatch демонстрирует пакетное создание ссылок.
+func ExampleHandler_PostShortenHandlerBatch() {
 	h := setupMemoryApp()
 
 	batchReq := []map[string]string{
@@ -136,8 +136,8 @@ func ExamplePostShortenHandlerBatch() {
 	// (пусто — демонстрационный пример)
 }
 
-// ExampleGetHandler демонстрирует редирект 307 по существующему id.
-func ExampleGetHandler() {
+// ExampleHandler_GetHandler демонстрирует редирект 307 по существующему id.
+func ExampleHandler_GetHandler() {
 	h := setupMemoryApp()
 
 	// Положим заранее в память "ручной" id, чтобы редирект был детерминированным.
@@ -163,8 +163,8 @@ func ExampleGetHandler() {
 	// https://example.com/landing
 }
 
-// ExampleGzipMiddleware демонстрирует прием gzip-сжатого тела для POST-хендлера.
-func ExampleGzipMiddleware() {
+// ExampleHandler_GzipMiddleware демонстрирует прием gzip-сжатого тела для POST-хендлера.
+func ExampleHandler_GzipMiddleware() {
 	h := setupMemoryApp()
 
 	// Подготовим gzip-тело с корректным URL внутри.
@@ -191,9 +191,9 @@ func ExampleGzipMiddleware() {
 	// (пусто — демонстрационный пример)
 }
 
-// ExampleGetDBPing демонстрирует проверку пинга БД.
+// ExampleHandler_GetDBPing демонстрирует проверку пинга БД.
 // В Memory-конфигурации подключения к БД нет — ожидаем 500.
-func ExampleGetDBPing() {
+func ExampleHandler_GetDBPing() {
 	h := setupMemoryApp()
 
 	req := httptest.NewRequest(http.MethodGet, "/ping", nil)
