@@ -14,10 +14,23 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"time"
 )
 
+type discardDriver struct{}
+
+func (discardDriver) Debug(*message.LogMessage) {}
+func (discardDriver) Info(*message.LogMessage)  {}
+func (discardDriver) Warn(*message.LogMessage)  {}
+func (discardDriver) Error(*message.LogMessage) {}
+func (discardDriver) Fatal(*message.LogMessage) {}
+func (discardDriver) Panic(*message.LogMessage) {}
+
+type noopAccessLogger struct{}
+
+func (noopAccessLogger) WriteToLog(time.Time, string, string, int, string) {}
+
 func setupMemoryApp() *Handler {
-	// Конфиг в память
 	config.AppConfig = &config.Config{
 		ServerAddr:     ":8080",
 		BaseURL:        "http://localhost:8080",
@@ -30,12 +43,12 @@ func setupMemoryApp() *Handler {
 		JWTCookieName:  "auth_token",
 	}
 
-	logger.New(message.InfoLevel)
+	// Глушим весь лог в примерах:
+	logger.Log = discardDriver{}        // ничего не пишет
+	logger.Logging = noopAccessLogger{} // и access-лог тоже молчит
 
-	// Память вместо БД
 	storage.InitStorage()
-
-	return &Handler{} // urlService не нужен для StorageType=Memory
+	return &Handler{}
 }
 
 // routerForGet создает chi.Router только для примера с GET /{id},
