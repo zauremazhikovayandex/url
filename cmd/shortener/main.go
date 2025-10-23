@@ -12,6 +12,7 @@ import (
 	"github.com/zauremazhikovayandex/url/internal/services"
 	"log"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"syscall"
@@ -71,6 +72,14 @@ func run() error {
 		defer cancel()
 		if err := srv.Shutdown(ctx); err != nil {
 			log.Printf("Shutdown error: %v", err)
+		}
+	}()
+
+	go func() {
+		log.Println("pprof on http://127.0.0.1:6060/debug/pprof/")
+		// Handler=nil => используется DefaultServeMux, куда pprof уже повесился через import _ "net/http/pprof"
+		if err := http.ListenAndServe("127.0.0.1:6060", nil); err != nil {
+			log.Println("pprof server error:", err)
 		}
 	}()
 
