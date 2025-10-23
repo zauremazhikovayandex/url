@@ -75,13 +75,13 @@ func run() error {
 		}
 	}()
 
-	go func() {
+	/*go func() {
 		log.Println("pprof on http://127.0.0.1:6060/debug/pprof/")
 		// Handler=nil => используется DefaultServeMux, куда pprof уже повесился через import _ "net/http/pprof"
 		if err := http.ListenAndServe("127.0.0.1:6060", nil); err != nil {
 			log.Println("pprof server error:", err)
 		}
-	}()
+	}()*/
 
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return fmt.Errorf("server error: %w", err)
