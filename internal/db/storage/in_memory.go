@@ -1,4 +1,4 @@
-// Package storage - Работа с файловым хранением
+// Package storage предоставляет простое in-memory и файловое хранилище ссылок.
 package storage
 
 import (
@@ -9,14 +9,16 @@ import (
 	"sync"
 )
 
+// Store — глобальное in-memory хранилище, инициализируемое при старте.
 var Store *Storage
 
+// Storage представляет потокобезопасное хранилище ключ→значение.
 type Storage struct {
 	data map[string]string
 	mu   sync.RWMutex
 }
 
-// InitStorage - инициализация хранилища
+// InitStorage инициализирует глобальное хранилище и загружает данные из файла (если указан путь).
 func InitStorage() {
 	Store = &Storage{data: make(map[string]string)}
 
@@ -26,14 +28,14 @@ func InitStorage() {
 	}
 }
 
-// Set - помещение данных в хранилище
+// Set сохраняет значение по ключу.
 func (s *Storage) Set(key, value string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.data[key] = value
 }
 
-// Get - получение данных из хранилища
+// Get возвращает значение по ключу.
 func (s *Storage) Get(key string) (string, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -41,12 +43,12 @@ func (s *Storage) Get(key string) (string, bool) {
 	return val, ok
 }
 
-// Delete - удаление данных из хранилища
+// Delete удаляет значение по ключу.
 func (s *Storage) Delete(key string) {
 	delete(s.data, key)
 }
 
-// ShutdownSaveToFile - завершение работы с хранилищем - сохранение данных
+// ShutdownSaveToFile сохраняет данные хранилища в файл перед остановкой.
 func (s *Storage) ShutdownSaveToFile(filename string) error {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -66,7 +68,7 @@ func (s *Storage) ShutdownSaveToFile(filename string) error {
 	return encoder.Encode(s.data)
 }
 
-// LoadFromFile - начало работы с хранилищем - извлечение данных
+// LoadFromFile загружает данные хранилища из файла.
 func (s *Storage) LoadFromFile(filename string) error {
 	f, err := os.Open(filename)
 	if err != nil {

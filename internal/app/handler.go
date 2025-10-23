@@ -24,6 +24,7 @@ import (
 	"time"
 )
 
+// URLPair описывает пару короткой и оригинальной ссылок в ответах API.
 type URLPair struct {
 	ShortURL    string `json:"short_url"`
 	OriginalURL string `json:"original_url"`
@@ -82,7 +83,7 @@ func resolveURLInsertError(ctx context.Context, w http.ResponseWriter, r *http.R
 	http.Error(w, "Internal server error", http.StatusInternalServerError)
 }
 
-// PostHandler - Генерирует ID и сохраняет URL в БД / Storage. На входе тип параметра TEXT
+// PostHandler принимает URL в теле запроса (text/plain), сохраняет и возвращает короткую ссылку.
 func (h *Handler) PostHandler(w http.ResponseWriter, r *http.Request) {
 
 	userID := auth.GetUserID(r.Context())
@@ -138,7 +139,7 @@ func (h *Handler) PostHandler(w http.ResponseWriter, r *http.Request) {
 	logger.Logging.WriteToLog(timeStart, originalURL, "POST", http.StatusCreated, shortURL)
 }
 
-// PostShortenHandler - Генерирует ID и сохраняет URL в БД / Storage. На входе тип параметра JSON
+// PostShortenHandler принимает JSON {"url": "..."} и возвращает короткую ссылку в JSON.
 func (h *Handler) PostShortenHandler(w http.ResponseWriter, r *http.Request) {
 
 	userID := auth.GetUserID(r.Context())
@@ -208,7 +209,7 @@ func (h *Handler) PostShortenHandler(w http.ResponseWriter, r *http.Request) {
 	logger.Logging.WriteToLog(timeStart, originalURL, "POST", http.StatusCreated, shortURL)
 }
 
-// PostShortenHandlerBatch - Генерирует ID и сохраняет URL в БД / Storage Пачкой
+// PostShortenHandlerBatch принимает массив JSON и возвращает массив коротких ссылок.
 func (h *Handler) PostShortenHandlerBatch(w http.ResponseWriter, r *http.Request) {
 	userID := auth.GetUserID(r.Context())
 
@@ -287,7 +288,7 @@ func (h *Handler) PostShortenHandlerBatch(w http.ResponseWriter, r *http.Request
 	}
 }
 
-// GetHandler - поиск URL по Id
+// GetHandler выполняет редирект 307 по id короткой ссылки.
 func (h *Handler) GetHandler(w http.ResponseWriter, r *http.Request) {
 	timeStart := time.Now()
 	storageType := config.AppConfig.StorageType
@@ -327,7 +328,7 @@ func (h *Handler) GetHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// GetUserURLs - поиск списка URL по их Ids
+// GetUserURLs возвращает список ссылок пользователя (короткая ↔ оригинальная).
 func (h *Handler) GetUserURLs(w http.ResponseWriter, r *http.Request) {
 	userID := auth.GetUserID(r.Context())
 
@@ -354,7 +355,7 @@ func (h *Handler) GetUserURLs(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
-// GzipMiddleware - сжатие передаваемых данных при необходимости и передача их в формате gzip
+// GzipMiddleware распаковывает входящий gzip и при необходимости сжимает ответ.
 func (h *Handler) GzipMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ow := w
@@ -381,7 +382,7 @@ func (h *Handler) GzipMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// GetDBPing - проверка работоспособности БД
+// GetDBPing проверяет доступность подключения к БД.
 func (h *Handler) GetDBPing(w http.ResponseWriter, r *http.Request) {
 	conn, err := postgres.SQLInstance()
 	if conn == nil || err != nil {
@@ -391,7 +392,7 @@ func (h *Handler) GetDBPing(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// DeleteUserURLs - пометка URL на удаление в БД пачкой
+// DeleteUserURLs помечает на удаление список ссылок пользователя.
 func (h *Handler) DeleteUserURLs(w http.ResponseWriter, r *http.Request) {
 	userID := auth.GetUserID(r.Context())
 

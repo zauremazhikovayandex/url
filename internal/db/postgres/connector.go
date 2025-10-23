@@ -1,4 +1,4 @@
-// Package postgres - Работа с базой данных postgres
+// Package postgres содержит доступ к БД PostgreSQL и вспомогательные функции.
 package postgres
 
 import (
@@ -11,6 +11,7 @@ import (
 	"time"
 )
 
+// SQLConnection инкапсулирует пул соединений и таймауты БД.
 type SQLConnection struct {
 	PgSQL   *pgxpool.Pool
 	PgConn  *pgxpool.Conn
@@ -21,7 +22,7 @@ var (
 	pgSQL *SQLConnection
 )
 
-// SQLInstance - инициализирует и возвращает инстанс БД
+// SQLInstance лениво инициализирует и возвращает singleton-подключение к БД.
 func SQLInstance() (*SQLConnection, error) {
 
 	if pgSQL != nil {
@@ -64,7 +65,7 @@ func SQLInstance() (*SQLConnection, error) {
 	return instance, nil
 }
 
-// Ping - Пинг БД
+// Ping выполняет ping базы данных.
 func (*SQLConnection) Ping() error {
 	if pgSQL != nil && pgSQL.PgSQL != nil {
 		ctx, cancel := context.WithCancel(context.Background())
@@ -79,7 +80,7 @@ func (*SQLConnection) Ping() error {
 	return nil
 }
 
-// CloseSQLInstance - закрытие инстанса БД
+// CloseSQLInstance закрывает пул соединений и сбрасывает singleton.
 func (*SQLConnection) CloseSQLInstance() {
 	if pgSQL != nil && pgSQL.PgSQL != nil {
 		logger.Log.Info(&message.LogMessage{Message: "Closing database connection pool..."})

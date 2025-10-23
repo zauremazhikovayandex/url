@@ -1,3 +1,4 @@
+// Package auth реализует аутентификацию и работу с пользовательским контекстом.
 package auth
 
 import (
@@ -10,12 +11,13 @@ import (
 	"github.com/golang-jwt/jwt/v4"
 )
 
+// Claims - UserID
 type Claims struct {
 	jwt.RegisteredClaims
 	UserID string
 }
 
-// Генерация JWT токена
+// GenerateToken - Генерация JWT токена
 func GenerateToken(userID string) (string, error) {
 	conf := config.AppConfig
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, Claims{
@@ -28,6 +30,7 @@ func GenerateToken(userID string) (string, error) {
 	return token.SignedString([]byte(conf.JWTSecretKey))
 }
 
+// GetUserID - Получить userID
 func GetUserID(ctx context.Context) string {
 	userID, _ := ctx.Value(UserIDKey).(string)
 	return userID

@@ -1,3 +1,4 @@
+// Package app содержит HTTP-обработчики и вспомогательные элементы веб-приложения.
 package app
 
 import (
@@ -7,10 +8,12 @@ import (
 	"github.com/zauremazhikovayandex/url/internal/services"
 )
 
+// Handler - структура сервиса
 type Handler struct {
 	urlService services.URLService
 }
 
+// InitHandlers Инициализация хендлеров
 func InitHandlers(urlService services.URLService) *chi.Mux {
 	h := &Handler{urlService: urlService}
 	r := chi.NewRouter()

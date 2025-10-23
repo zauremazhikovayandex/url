@@ -9,12 +9,13 @@ import (
 	"time"
 )
 
-// Конфиг файл
+// AppConfig — глобальная конфигурация приложения.
 var (
 	AppConfig *Config
 	once      sync.Once
 )
 
+// Config описывает параметры HTTP-сервера, хранилища и авторизации.
 type Config struct {
 	ServerAddr     string
 	BaseURL        string
@@ -27,12 +28,13 @@ type Config struct {
 	JWTCookieName  string
 }
 
+// PostgresConfig описывает параметры подключения к PostgreSQL.
 type PostgresConfig struct {
 	DBConnection string
 	DBTimeout    int
 }
 
-// InitConfig - инициализация когфигурации
+// InitConfig инициализирует конфигурацию из флагов и переменных окружения.
 func InitConfig() {
 	once.Do(func() {
 		// Парсим флаги во временные переменные
