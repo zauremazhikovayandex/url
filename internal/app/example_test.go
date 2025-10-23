@@ -9,14 +9,15 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/zauremazhikovayandex/url/internal/config"
 	"github.com/zauremazhikovayandex/url/internal/db/storage"
+	"github.com/zauremazhikovayandex/url/internal/logger"
+	"github.com/zauremazhikovayandex/url/internal/logger/message"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 )
 
-// setupMemoryApp минимально конфигурирует приложение для примеров: память + базовый URL.
-// БД не используется, поэтому urlService может быть nil.
 func setupMemoryApp() *Handler {
+	// Конфиг в память
 	config.AppConfig = &config.Config{
 		ServerAddr:     ":8080",
 		BaseURL:        "http://localhost:8080",
@@ -28,8 +29,13 @@ func setupMemoryApp() *Handler {
 		JWTTokenExp:    0,
 		JWTCookieName:  "auth_token",
 	}
+
+	logger.New(message.InfoLevel)
+
+	// Память вместо БД
 	storage.InitStorage()
-	return &Handler{} // urlService не нужен для Memory-пути
+
+	return &Handler{} // urlService не нужен для StorageType=Memory
 }
 
 // routerForGet создает chi.Router только для примера с GET /{id},
