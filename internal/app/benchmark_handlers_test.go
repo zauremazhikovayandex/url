@@ -11,7 +11,6 @@ import (
 
 	"github.com/zauremazhikovayandex/url/internal/config"
 	"github.com/zauremazhikovayandex/url/internal/db/postgres"
-	"github.com/zauremazhikovayandex/url/internal/db/storage"
 	"github.com/zauremazhikovayandex/url/internal/logger"
 	"github.com/zauremazhikovayandex/url/internal/services"
 )
@@ -29,16 +28,13 @@ func (noopService) DeleteForUser(context.Context, string, string) error         
 func (noopService) BatchDelete(context.Context, []string, string) error             { return nil }
 
 func BenchmarkPostShortenJSON(b *testing.B) {
-	// Полный bootstrap как в main()
 	config.InitConfig()
 	logger.New("info")
-	storage.InitStorage()
 	config.AppConfig.StorageType = "DB"
 
 	srv := httptest.NewServer(InitHandlers(noopService{}))
 	defer srv.Close()
 
-	// Тело запроса
 	type req struct {
 		URL string `json:"url"`
 	}
