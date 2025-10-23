@@ -75,6 +75,7 @@ func run() error {
 		}
 	}()
 
+	// PPROF
 	go func() {
 		log.Println("pprof on http://127.0.0.1:6060/debug/pprof/")
 		// Handler=nil => используется DefaultServeMux, куда pprof уже повесился через import _ "net/http/pprof"
