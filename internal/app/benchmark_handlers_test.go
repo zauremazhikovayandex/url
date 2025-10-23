@@ -11,10 +11,12 @@ import (
 
 	"github.com/zauremazhikovayandex/url/internal/config"
 	"github.com/zauremazhikovayandex/url/internal/db/postgres"
+	"github.com/zauremazhikovayandex/url/internal/db/storage"
+	"github.com/zauremazhikovayandex/url/internal/logger"
 	"github.com/zauremazhikovayandex/url/internal/services"
 )
 
-// --- мок URLService, чтоб не ходить в БД ---
+// ---- мок URLService, чтобы не ходить в БД ----
 type noopService struct{}
 
 var _ services.URLService = (*noopService)(nil)
@@ -26,14 +28,17 @@ func (noopService) SaveURL(context.Context, string, string, string) error       
 func (noopService) DeleteForUser(context.Context, string, string) error             { return nil }
 func (noopService) BatchDelete(context.Context, []string, string) error             { return nil }
 
-// --- Бенч: POST /api/shorten ---
 func BenchmarkPostShortenJSON(b *testing.B) {
+	// Полный bootstrap как в main()
 	config.InitConfig()
+	logger.New("info")
+	storage.InitStorage()
 	config.AppConfig.StorageType = "DB"
 
 	srv := httptest.NewServer(InitHandlers(noopService{}))
 	defer srv.Close()
 
+	// Тело запроса
 	type req struct {
 		URL string `json:"url"`
 	}
