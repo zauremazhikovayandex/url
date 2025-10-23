@@ -1,3 +1,4 @@
+// Package config - Работа с конфигурацией приложения
 package config
 
 import (
@@ -8,6 +9,7 @@ import (
 	"time"
 )
 
+// Конфиг файл
 var (
 	AppConfig *Config
 	once      sync.Once
@@ -30,6 +32,7 @@ type PostgresConfig struct {
 	DBTimeout    int
 }
 
+// InitConfig - инициализация когфигурации
 func InitConfig() {
 	once.Do(func() {
 		// Парсим флаги во временные переменные

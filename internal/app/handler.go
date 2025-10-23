@@ -1,3 +1,4 @@
+// Package app содержит хендлеры
 package app
 
 import (
@@ -28,6 +29,7 @@ type URLPair struct {
 	OriginalURL string `json:"original_url"`
 }
 
+// generateShortID - Генерация ID
 func generateShortID(n int) (string, error) {
 	b := make([]byte, n)
 	_, err := rand.Read(b)
@@ -37,6 +39,7 @@ func generateShortID(n int) (string, error) {
 	return base64.URLEncoding.EncodeToString(b)[:n], nil
 }
 
+// isValidURL - Проверка на корректный URL
 func isValidURL(rawURL string) bool {
 	parsed, err := url.ParseRequestURI(rawURL)
 	if err != nil {
@@ -45,6 +48,7 @@ func isValidURL(rawURL string) bool {
 	return parsed.Scheme == "http" || parsed.Scheme == "https"
 }
 
+// resolveURLInsertError - Находим ID из БД по URL
 func resolveURLInsertError(ctx context.Context, w http.ResponseWriter, r *http.Request, h *Handler, timeStart time.Time, originalURL string, err error) {
 	if errors.Is(err, postgres.ErrDuplicateOriginalURL) {
 		// Получаем уже существующий ID
@@ -78,6 +82,7 @@ func resolveURLInsertError(ctx context.Context, w http.ResponseWriter, r *http.R
 	http.Error(w, "Internal server error", http.StatusInternalServerError)
 }
 
+// PostHandler - Генерирует ID и сохраняет URL в БД / Storage. На входе тип параметра TEXT
 func (h *Handler) PostHandler(w http.ResponseWriter, r *http.Request) {
 
 	userID := auth.GetUserID(r.Context())
@@ -133,6 +138,7 @@ func (h *Handler) PostHandler(w http.ResponseWriter, r *http.Request) {
 	logger.Logging.WriteToLog(timeStart, originalURL, "POST", http.StatusCreated, shortURL)
 }
 
+// PostShortenHandler - Генерирует ID и сохраняет URL в БД / Storage. На входе тип параметра JSON
 func (h *Handler) PostShortenHandler(w http.ResponseWriter, r *http.Request) {
 
 	userID := auth.GetUserID(r.Context())
@@ -202,6 +208,7 @@ func (h *Handler) PostShortenHandler(w http.ResponseWriter, r *http.Request) {
 	logger.Logging.WriteToLog(timeStart, originalURL, "POST", http.StatusCreated, shortURL)
 }
 
+// PostShortenHandlerBatch - Генерирует ID и сохраняет URL в БД / Storage Пачкой
 func (h *Handler) PostShortenHandlerBatch(w http.ResponseWriter, r *http.Request) {
 	userID := auth.GetUserID(r.Context())
 
@@ -280,6 +287,7 @@ func (h *Handler) PostShortenHandlerBatch(w http.ResponseWriter, r *http.Request
 	}
 }
 
+// GetHandler - поиск URL по Id
 func (h *Handler) GetHandler(w http.ResponseWriter, r *http.Request) {
 	timeStart := time.Now()
 	storageType := config.AppConfig.StorageType
@@ -319,6 +327,7 @@ func (h *Handler) GetHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// GetUserURLs - поиск списка URL по их Ids
 func (h *Handler) GetUserURLs(w http.ResponseWriter, r *http.Request) {
 	userID := auth.GetUserID(r.Context())
 
@@ -345,6 +354,7 @@ func (h *Handler) GetUserURLs(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
+// GzipMiddleware - сжатие передаваемых данных при необходимости и передача их в формате gzip
 func (h *Handler) GzipMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ow := w
@@ -371,6 +381,7 @@ func (h *Handler) GzipMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+// GetDBPing - проверка работоспособности БД
 func (h *Handler) GetDBPing(w http.ResponseWriter, r *http.Request) {
 	conn, err := postgres.SQLInstance()
 	if conn == nil || err != nil {
@@ -380,6 +391,7 @@ func (h *Handler) GetDBPing(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// DeleteUserURLs - пометка URL на удаление в БД пачкой
 func (h *Handler) DeleteUserURLs(w http.ResponseWriter, r *http.Request) {
 	userID := auth.GetUserID(r.Context())
 

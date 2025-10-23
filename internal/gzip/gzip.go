@@ -1,3 +1,4 @@
+// Package gzip - Работа с сжатием передаваемых данных
 package gzip
 
 import (

@@ -1,3 +1,4 @@
+// Package storage - Работа с файловым хранением
 package storage
 
 import (
@@ -15,6 +16,7 @@ type Storage struct {
 	mu   sync.RWMutex
 }
 
+// InitStorage - инициализация хранилища
 func InitStorage() {
 	Store = &Storage{data: make(map[string]string)}
 
@@ -24,12 +26,14 @@ func InitStorage() {
 	}
 }
 
+// Set - помещение данных в хранилище
 func (s *Storage) Set(key, value string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.data[key] = value
 }
 
+// Get - получение данных из хранилища
 func (s *Storage) Get(key string) (string, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -37,10 +41,12 @@ func (s *Storage) Get(key string) (string, bool) {
 	return val, ok
 }
 
+// Delete - удаление данных из хранилища
 func (s *Storage) Delete(key string) {
 	delete(s.data, key)
 }
 
+// ShutdownSaveToFile - завершение работы с хранилищем - сохранение данных
 func (s *Storage) ShutdownSaveToFile(filename string) error {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -60,6 +66,7 @@ func (s *Storage) ShutdownSaveToFile(filename string) error {
 	return encoder.Encode(s.data)
 }
 
+// LoadFromFile - начало работы с хранилищем - извлечение данных
 func (s *Storage) LoadFromFile(filename string) error {
 	f, err := os.Open(filename)
 	if err != nil {
@@ -84,6 +91,7 @@ func (s *Storage) LoadFromFile(filename string) error {
 	return nil
 }
 
+// getDir - Получение директории хранилища
 func getDir(path string) string {
 	if idx := len(path) - len("/url_history.json"); idx > 0 {
 		return path[:idx]

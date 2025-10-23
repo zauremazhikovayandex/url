@@ -1,3 +1,4 @@
+// Package postgres - Работа с базой данных postgres
 package postgres
 
 import (
@@ -20,6 +21,7 @@ var (
 	pgSQL *SQLConnection
 )
 
+// SQLInstance - инициализирует и возвращает инстанс БД
 func SQLInstance() (*SQLConnection, error) {
 
 	if pgSQL != nil {
@@ -62,6 +64,7 @@ func SQLInstance() (*SQLConnection, error) {
 	return instance, nil
 }
 
+// Ping - Пинг БД
 func (*SQLConnection) Ping() error {
 	if pgSQL != nil && pgSQL.PgSQL != nil {
 		ctx, cancel := context.WithCancel(context.Background())
@@ -76,6 +79,7 @@ func (*SQLConnection) Ping() error {
 	return nil
 }
 
+// CloseSQLInstance - закрытие инстанса БД
 func (*SQLConnection) CloseSQLInstance() {
 	if pgSQL != nil && pgSQL.PgSQL != nil {
 		logger.Log.Info(&message.LogMessage{Message: "Closing database connection pool..."})

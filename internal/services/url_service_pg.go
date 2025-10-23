@@ -1,3 +1,4 @@
+// Package services Бизнес логика и Прослойка между Хендлером и БД
 package services
 
 import (
@@ -10,18 +11,22 @@ import (
 
 type PostgresURLService struct{}
 
+// GetOriginalURL - Получение URL по Id
 func (s *PostgresURLService) GetOriginalURL(ctx context.Context, id string) (string, error) {
 	return postgres.SelectURL(ctx, id)
 }
 
+// GetURLsByUserID - Получение всех URL по userID
 func (s *PostgresURLService) GetURLsByUserID(ctx context.Context, userID string) ([]postgres.URL, error) {
 	return postgres.SelectURLsByUser(ctx, userID)
 }
 
+// GetShortIDByOriginalURL - Получение Id по URL
 func (s *PostgresURLService) GetShortIDByOriginalURL(ctx context.Context, originalURL string) (string, error) {
 	return postgres.SelectIDByOriginalURL(ctx, originalURL)
 }
 
+// SaveURL - Сохранение нового URL
 func (s *PostgresURLService) SaveURL(ctx context.Context, id string, originalURL string, userID string) error {
 	err := postgres.InsertURL(ctx, id, originalURL, userID)
 	if err != nil {
@@ -34,10 +39,12 @@ func (s *PostgresURLService) SaveURL(ctx context.Context, id string, originalURL
 	return nil
 }
 
+// DeleteForUser - Удаление URL по id и userID
 func (s *PostgresURLService) DeleteForUser(ctx context.Context, id string, userID string) error {
 	return postgres.DeleteURL(ctx, id, userID)
 }
 
+// BatchDelete - Удаление URL пачкой по списку id и userID
 func (s *PostgresURLService) BatchDelete(ctx context.Context, ids []string, userID string) error {
 	return postgres.BatchDeleteURLs(ctx, ids, userID)
 }

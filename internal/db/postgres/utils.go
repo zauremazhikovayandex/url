@@ -1,3 +1,4 @@
+// Package postgres - Пакет по работе с БД Postgres
 package postgres
 
 import (
@@ -20,6 +21,7 @@ type URL struct {
 var ErrURLDeleted = errors.New("url_deleted")
 var ErrDuplicateOriginalURL = errors.New("duplicate_original_url")
 
+// SelectURL - Получение URL по Id
 func SelectURL(ctx context.Context, id string) (string, error) {
 	instance, err := SQLInstance()
 	if err != nil {
@@ -44,6 +46,7 @@ func SelectURL(ctx context.Context, id string) (string, error) {
 	return u.OriginalURL, nil
 }
 
+// InsertURL - Сохранение нового URL
 func InsertURL(ctx context.Context, id string, originalURL string, userID string) error {
 	instance, err := SQLInstance()
 	if err != nil {
@@ -67,6 +70,7 @@ func InsertURL(ctx context.Context, id string, originalURL string, userID string
 	return nil
 }
 
+// SelectIDByOriginalURL - Получение Id по URL
 func SelectIDByOriginalURL(ctx context.Context, originalURL string) (string, error) {
 	instance, err := SQLInstance()
 	if err != nil {
@@ -87,6 +91,7 @@ func SelectIDByOriginalURL(ctx context.Context, originalURL string) (string, err
 	return id, nil
 }
 
+// SelectURLsByUser - Получение всех URL по userID
 func SelectURLsByUser(ctx context.Context, userID string) ([]URL, error) {
 	instance, err := SQLInstance()
 	if err != nil {
@@ -116,6 +121,7 @@ func SelectURLsByUser(ctx context.Context, userID string) ([]URL, error) {
 	return results, nil
 }
 
+// CreateTables - Создание таблиц в случае их отсутствия
 func CreateTables(db *SQLConnection) error {
 	ctx := context.Background()
 	_, err := db.PgSQL.Exec(ctx,
@@ -131,6 +137,7 @@ func CreateTables(db *SQLConnection) error {
 	return nil
 }
 
+// PrepareDB - Подготовка БД при запуске приложения
 func PrepareDB(db *SQLConnection) {
 	err := CreateTables(db)
 	if err != nil {
@@ -138,6 +145,7 @@ func PrepareDB(db *SQLConnection) {
 	}
 }
 
+// DeleteURL - Удаление URL по id и userID
 func DeleteURL(ctx context.Context, id string, userID string) error {
 	if id == "" {
 		return nil
@@ -163,6 +171,7 @@ func DeleteURL(ctx context.Context, id string, userID string) error {
 	return err
 }
 
+// BatchDeleteURLs - Удаление URL пачкой по списку id и userID
 func BatchDeleteURLs(ctx context.Context, ids []string, userID string) error {
 	if len(ids) == 0 {
 		return nil
