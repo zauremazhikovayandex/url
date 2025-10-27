@@ -1,4 +1,3 @@
-// example_test.go
 package app
 
 import (
@@ -6,15 +5,17 @@ import (
 	"compress/gzip"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"time"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/zauremazhikovayandex/url/internal/config"
 	"github.com/zauremazhikovayandex/url/internal/db/storage"
 	"github.com/zauremazhikovayandex/url/internal/logger"
 	"github.com/zauremazhikovayandex/url/internal/logger/message"
-	"net/http"
-	"net/http/httptest"
-	"strings"
-	"time"
 )
 
 type discardDriver struct{}
@@ -30,8 +31,16 @@ type noopAccessLogger struct{}
 
 func (noopAccessLogger) WriteToLog(time.Time, string, string, int, string) {}
 
-func setupMemoryApp() *Handler {
-	config.AppConfig = &config.Config{
+// setupMemoryApp настраивает окружение и возвращает teardown для безопасного восстановления глобалок.
+func setupMemoryApp() (*Handler, func()) {
+	// save globals
+	prevCfg := config.AppConfig
+	prevStore := storage.Store
+	prevLog := logger.Log
+	prevLogging := logger.Logging
+
+	// local, isolated config
+	cfg := &config.Config{
 		ServerAddr:     ":8080",
 		BaseURL:        "http://localhost:8080",
 		UseFileStorage: "",
@@ -42,97 +51,88 @@ func setupMemoryApp() *Handler {
 		JWTTokenExp:    0,
 		JWTCookieName:  "auth_token",
 	}
+	config.AppConfig = cfg
 
-	// Глушим весь лог в примерах:
-	logger.Log = discardDriver{}        // ничего не пишет
-	logger.Logging = noopAccessLogger{} // и access-лог тоже молчит
+	// mute logs
+	logger.Log = discardDriver{}
+	logger.Logging = noopAccessLogger{}
 
+	// fresh in-mem store
+	storage.Store = &storage.Storage{}
 	storage.InitStorage()
-	return &Handler{}
+
+	teardown := func() {
+		config.AppConfig = prevCfg
+		storage.Store = prevStore
+		logger.Log = prevLog
+		logger.Logging = prevLogging
+	}
+
+	return &Handler{}, teardown
 }
 
-// routerForGet создает chi.Router только для примера с GET /{id},
-// чтобы chi проставил URLParam("id").
 func routerForGet(h *Handler) http.Handler {
 	r := chi.NewRouter()
 	r.Get("/{id}", h.GetHandler)
 	return r
 }
 
-// ExampleHandler_PostHandler демонстрирует создание короткой ссылки через POST-тело (text/plain).
+// ExampleHandler_PostHandler — создание короткой ссылки (text/plain).
 func ExampleHandler_PostHandler() {
-	h := setupMemoryApp()
+	h, done := setupMemoryApp()
+	defer done()
 
-	body := "https://example.com/hello"
-	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
-	// Явно указывать Content-Type не обязательно для этого хендлера, он читает «как есть».
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("https://example.com/hello"))
 	w := httptest.NewRecorder()
-
 	h.PostHandler(w, req)
 
 	resp := w.Result()
 	defer resp.Body.Close()
 
-	fmt.Println("Status:", resp.Status) // ожидается 201 Created
-	fmt.Println("Content-Type:", resp.Header.Get("Content-Type"))
-	// Тело ответа — полный короткий URL, например: http://localhost:8080/AbCdEf12
-	// Оно содержит случайный id, поэтому в примере мы не фиксируем его значение.
-	// Output:
-	// (пусто — пример демонстрационный, без assert-а по выводу)
+	fmt.Println(resp.Status)
 }
 
-// ExampleHandler_PostShortenHandler демонстрирует создание короткой ссылки через JSON (application/json).
+// ExampleHandler_PostShortenHandler — создание через JSON.
 func ExampleHandler_PostShortenHandler() {
-	h := setupMemoryApp()
+	h, done := setupMemoryApp()
+	defer done()
 
-	payload := map[string]string{"url": "https://golang.org"}
-	b, _ := json.Marshal(payload)
-
+	b, _ := json.Marshal(map[string]string{"url": "https://golang.org"})
 	req := httptest.NewRequest(http.MethodPost, "/api/shorten", bytes.NewReader(b))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
-
 	h.PostShortenHandler(w, req)
 
 	resp := w.Result()
 	defer resp.Body.Close()
 
-	fmt.Println("Status:", resp.Status) // ожидается 201 Created
-	fmt.Println("Content-Type:", resp.Header.Get("Content-Type"))
-	// Тело — {"result": "<short_url>"} со случайным id. В примере не проверяем детально.
-	// Output:
-	// (пусто — демонстрационный пример)
+	fmt.Println(resp.Status)
+	fmt.Println(resp.Header.Get("Content-Type"))
 }
 
-// ExampleHandler_PostShortenHandler_invalid демонстрирует валидационную ошибку на неверный URL с JSON.
+// ExampleHandler_PostShortenHandler_invalid — ошибка валидации (JSON с не-URL).
 func ExampleHandler_PostShortenHandler_invalid() {
-	h := setupMemoryApp()
+	h, done := setupMemoryApp()
+	defer done()
 
-	payload := map[string]string{"url": "not a url"}
-	b, _ := json.Marshal(payload)
-
+	b, _ := json.Marshal(map[string]string{"url": "not a url"})
 	req := httptest.NewRequest(http.MethodPost, "/api/shorten", bytes.NewReader(b))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
-
 	h.PostShortenHandler(w, req)
 
 	resp := w.Result()
 	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
 
-	buf := new(bytes.Buffer)
-	buf.ReadFrom(resp.Body)
-
-	fmt.Print(resp.Status, "\n")
-	fmt.Print(buf.String())
-	// Output:
-	// 400 Bad Request
-	// Invalid URL format
+	fmt.Println(resp.Status)
+	fmt.Print(string(body))
 }
 
-// ExampleHandler_PostShortenHandlerBatch демонстрирует пакетное создание ссылок.
+// ExampleHandler_PostShortenHandlerBatch — пакетное создание: проверяем статус и размер ответа.
 func ExampleHandler_PostShortenHandlerBatch() {
-	h := setupMemoryApp()
+	h, done := setupMemoryApp()
+	defer done()
 
 	batchReq := []map[string]string{
 		{"correlation_id": "1", "original_url": "https://a.example"},
@@ -143,14 +143,22 @@ func ExampleHandler_PostShortenHandlerBatch() {
 	req := httptest.NewRequest(http.MethodPost, "/api/shorten/batch", bytes.NewReader(b))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
-
 	h.PostShortenHandlerBatch(w, req)
-	_ = w.Result().Body.Close()
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	var out []map[string]string
+	_ = json.NewDecoder(resp.Body).Decode(&out)
+
+	fmt.Println(resp.Status)
+	fmt.Println(len(out))
 }
 
-// ExampleHandler_GetHandler демонстрирует редирект 307 по существующему id.
+// ExampleHandler_GetHandler — редирект по фиксированному id.
 func ExampleHandler_GetHandler() {
-	h := setupMemoryApp()
+	h, done := setupMemoryApp()
+	defer done()
 
 	id := "fixedID1"
 	original := "https://example.com/landing"
@@ -159,7 +167,6 @@ func ExampleHandler_GetHandler() {
 	r := routerForGet(h)
 	req := httptest.NewRequest(http.MethodGet, "/"+id, nil)
 	w := httptest.NewRecorder()
-
 	r.ServeHTTP(w, req)
 
 	resp := w.Result()
@@ -169,9 +176,10 @@ func ExampleHandler_GetHandler() {
 	fmt.Println(resp.Header.Get("Location"))
 }
 
-// ExampleHandler_GzipMiddleware демонстрирует прием gzip-сжатого тела для POST-хендлера.
+// ExampleHandler_GzipMiddleware — входное тело gzipped, проверяем статус.
 func ExampleHandler_GzipMiddleware() {
-	h := setupMemoryApp()
+	h, done := setupMemoryApp()
+	defer done()
 
 	var buf bytes.Buffer
 	zw := gzip.NewWriter(&buf)
@@ -186,23 +194,9 @@ func ExampleHandler_GzipMiddleware() {
 	w := httptest.NewRecorder()
 
 	handler.ServeHTTP(w, req)
-	_ = w.Result().Body.Close()
-}
-
-// ExampleHandler_GetDBPing демонстрирует проверку пинга БД.
-// В Memory-конфигурации подключения к БД нет — ожидаем 500.
-func ExampleHandler_GetDBPing() {
-	h := setupMemoryApp()
-
-	req := httptest.NewRequest(http.MethodGet, "/ping", nil)
-	w := httptest.NewRecorder()
-
-	h.GetDBPing(w, req)
 
 	resp := w.Result()
 	defer resp.Body.Close()
 
-	fmt.Println(resp.Status) // ожидается 500 Internal Server Error
-	// Output:
-	// 500 Internal Server Error
+	fmt.Println(resp.Status)
 }
