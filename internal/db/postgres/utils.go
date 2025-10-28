@@ -1,3 +1,4 @@
+// Package postgres - Пакет по работе с БД Postgres
 package postgres
 
 import (
@@ -11,15 +12,20 @@ import (
 	"strings"
 )
 
+// URL представляет запись о короткой ссылке в БД.
 type URL struct {
 	ID          string
 	OriginalURL string
 	Deleted     int
 }
 
+// ErrURLDeleted сигнализирует, что ссылка помечена как удаленная.
 var ErrURLDeleted = errors.New("url_deleted")
+
+// ErrDuplicateOriginalURL сигнализирует, что оригинальный URL уже существует.
 var ErrDuplicateOriginalURL = errors.New("duplicate_original_url")
 
+// SelectURL возвращает оригинальный URL по id.
 func SelectURL(ctx context.Context, id string) (string, error) {
 	instance, err := SQLInstance()
 	if err != nil {
@@ -44,6 +50,7 @@ func SelectURL(ctx context.Context, id string) (string, error) {
 	return u.OriginalURL, nil
 }
 
+// InsertURL сохраняет новый URL, возвращая ошибку при дубликате.
 func InsertURL(ctx context.Context, id string, originalURL string, userID string) error {
 	instance, err := SQLInstance()
 	if err != nil {
@@ -67,6 +74,7 @@ func InsertURL(ctx context.Context, id string, originalURL string, userID string
 	return nil
 }
 
+// SelectIDByOriginalURL возвращает id по оригинальному URL.
 func SelectIDByOriginalURL(ctx context.Context, originalURL string) (string, error) {
 	instance, err := SQLInstance()
 	if err != nil {
@@ -87,6 +95,7 @@ func SelectIDByOriginalURL(ctx context.Context, originalURL string) (string, err
 	return id, nil
 }
 
+// SelectURLsByUser возвращает все активные URL пользователя.
 func SelectURLsByUser(ctx context.Context, userID string) ([]URL, error) {
 	instance, err := SQLInstance()
 	if err != nil {
@@ -116,6 +125,7 @@ func SelectURLsByUser(ctx context.Context, userID string) ([]URL, error) {
 	return results, nil
 }
 
+// CreateTables создает необходимые таблицы, если их нет.
 func CreateTables(db *SQLConnection) error {
 	ctx := context.Background()
 	_, err := db.PgSQL.Exec(ctx,
@@ -131,6 +141,7 @@ func CreateTables(db *SQLConnection) error {
 	return nil
 }
 
+// PrepareDB выполняет начальную подготовку БД (миграции/создание таблиц).
 func PrepareDB(db *SQLConnection) {
 	err := CreateTables(db)
 	if err != nil {
@@ -138,6 +149,7 @@ func PrepareDB(db *SQLConnection) {
 	}
 }
 
+// DeleteURL помечает ссылку как удаленную по id и userID.
 func DeleteURL(ctx context.Context, id string, userID string) error {
 	if id == "" {
 		return nil
@@ -163,6 +175,7 @@ func DeleteURL(ctx context.Context, id string, userID string) error {
 	return err
 }
 
+// BatchDeleteURLs помечает на удаление список ссылок по id и userID.
 func BatchDeleteURLs(ctx context.Context, ids []string, userID string) error {
 	if len(ids) == 0 {
 		return nil

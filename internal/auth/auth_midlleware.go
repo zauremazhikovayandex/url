@@ -1,3 +1,4 @@
+// Package auth реализует аутентификацию и работу с пользовательским контекстом.
 package auth
 
 import (
@@ -9,6 +10,7 @@ import (
 	"github.com/zauremazhikovayandex/url/internal/config"
 )
 
+// Middleware — middleware, добавляющий userID в контекст запроса из cookie/JWT.
 func Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		conf := config.AppConfig

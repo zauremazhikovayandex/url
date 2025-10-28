@@ -1,3 +1,4 @@
+// Package gzip содержит обертки для gzip-сжатия/распаковки HTTP-тел.
 package gzip
 
 import (
@@ -13,6 +14,7 @@ type compressWriter struct {
 	zw *gzip.Writer
 }
 
+// NewCompressWriter возвращает http.ResponseWriter, сжимающий ответ gzip'ом.
 func NewCompressWriter(w http.ResponseWriter) *compressWriter {
 	return &compressWriter{
 		w:  w,
@@ -20,14 +22,18 @@ func NewCompressWriter(w http.ResponseWriter) *compressWriter {
 	}
 }
 
+// Header возвращает заголовки исходного http.ResponseWriter.
 func (c *compressWriter) Header() http.Header {
 	return c.w.Header()
 }
 
+// Write записывает несжатые данные p, сжимая их во внутренний gzip.Writer.
 func (c *compressWriter) Write(p []byte) (int, error) {
 	return c.zw.Write(p)
 }
 
+// WriteHeader устанавливает статус ответа и проставляет Content-Encoding: gzip
+// для успешных (statusCode < 300) ответов до записи тела.
 func (c *compressWriter) WriteHeader(statusCode int) {
 	if statusCode < 300 {
 		c.w.Header().Set("Content-Encoding", "gzip")
@@ -35,18 +41,20 @@ func (c *compressWriter) WriteHeader(statusCode int) {
 	c.w.WriteHeader(statusCode)
 }
 
-// Close закрывает gzip.Writer и досылает все данные из буфера.
+// Close закрывает внутренний gzip.Writer, досылая все буферизированные данные.
 func (c *compressWriter) Close() error {
 	return c.zw.Close()
 }
 
-// compressReader реализует интерфейс io.ReadCloser и позволяет прозрачно для сервера
-// декомпрессировать получаемые от клиента данные
+// compressReader реализует io.ReadCloser и прозрачно декомпрессирует входящее
+// gzip-тело запроса для дальнейшего чтения обработчиком.
 type compressReader struct {
 	r  io.ReadCloser
 	zr *gzip.Reader
 }
 
+// NewCompressReader создает обертку для чтения gzip-сжатого тела запроса.
+// На вход ожидается io.ReadCloser (например, r.Body).
 func NewCompressReader(r io.ReadCloser) (*compressReader, error) {
 	zr, err := gzip.NewReader(r)
 	if err != nil {
@@ -59,10 +67,12 @@ func NewCompressReader(r io.ReadCloser) (*compressReader, error) {
 	}, nil
 }
 
+// Read читает разжатые данные в p из внутреннего gzip.Reader.
 func (c compressReader) Read(p []byte) (n int, err error) {
 	return c.zr.Read(p)
 }
 
+// Close закрывает исходный r и внутренний gzip.Reader.
 func (c *compressReader) Close() error {
 	if err := c.r.Close(); err != nil {
 		return err

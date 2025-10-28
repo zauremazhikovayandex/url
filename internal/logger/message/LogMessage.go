@@ -1,5 +1,7 @@
+// Package message содержит типы и константы сообщений логгера.
 package message
 
+// Константы уровней логирования.
 const (
 	PanicLevel = "panic"
 	FatalLevel = "fatal"
@@ -10,6 +12,7 @@ const (
 	TraceLevel = "trace"
 )
 
+// LogMessage представляет структуру сообщения для логгера.
 type LogMessage struct {
 	Message     string                  `json:"message"`
 	FullMessage *string                 `json:"full_message,omitempty"`
