@@ -19,6 +19,12 @@ import (
 	"time"
 )
 
+var (
+	buildVersion string
+	buildDate    string
+	buildCommit  string
+)
+
 func main() {
 	if err := run(); err != nil {
 		panic(err)
@@ -26,6 +32,20 @@ func main() {
 }
 
 func run() error {
+	// Печать сведений о сборке
+	if buildVersion == "" {
+		buildVersion = "N/A"
+	}
+	if buildDate == "" {
+		buildDate = "N/A"
+	}
+	if buildCommit == "" {
+		buildCommit = "N/A"
+	}
+	fmt.Println("Build version:", buildVersion)
+	fmt.Println("Build date:", buildDate)
+	fmt.Println("Build commit:", buildCommit)
+
 	//Init Config
 	config.InitConfig()
 
