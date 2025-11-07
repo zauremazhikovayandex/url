@@ -31,20 +31,25 @@ func main() {
 	}
 }
 
+// getOrDefault возвращает def, если s пустая строка
+func printRealOrDefaultBuildInfo(s string, buildV string) {
+	if buildV == "" {
+		fmt.Printf("Build version: %s: %s\n", s, "N/A")
+	} else {
+		fmt.Printf("Build version: %s: %s\n", s, buildV)
+	}
+}
+
+// printBuildInfo печатает сведения о сборке в stdout
+func printBuildInfo() {
+	printRealOrDefaultBuildInfo("Build version", buildVersion)
+	printRealOrDefaultBuildInfo("Build date", buildDate)
+	printRealOrDefaultBuildInfo("Build commit", buildCommit)
+}
+
 func run() error {
 	// Печать сведений о сборке
-	if buildVersion == "" {
-		buildVersion = "N/A"
-	}
-	if buildDate == "" {
-		buildDate = "N/A"
-	}
-	if buildCommit == "" {
-		buildCommit = "N/A"
-	}
-	fmt.Println("Build version:", buildVersion)
-	fmt.Println("Build date:", buildDate)
-	fmt.Println("Build commit:", buildCommit)
+	printBuildInfo()
 
 	//Init Config
 	config.InitConfig()
