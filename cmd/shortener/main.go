@@ -19,13 +19,38 @@ import (
 	"time"
 )
 
+var (
+	buildVersion string
+	buildDate    string
+	buildCommit  string
+)
+
 func main() {
 	if err := run(); err != nil {
 		panic(err)
 	}
 }
 
+// getOrDefault возвращает def, если s пустая строка
+func printRealOrDefaultBuildInfo(s string, buildV string) {
+	if buildV == "" {
+		fmt.Printf("Build version: %s: %s\n", s, "N/A")
+	} else {
+		fmt.Printf("Build version: %s: %s\n", s, buildV)
+	}
+}
+
+// printBuildInfo печатает сведения о сборке в stdout
+func printBuildInfo() {
+	printRealOrDefaultBuildInfo("Build version", buildVersion)
+	printRealOrDefaultBuildInfo("Build date", buildDate)
+	printRealOrDefaultBuildInfo("Build commit", buildCommit)
+}
+
 func run() error {
+	// Печать сведений о сборке
+	printBuildInfo()
+
 	//Init Config
 	config.InitConfig()
 
