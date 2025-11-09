@@ -134,16 +134,23 @@ func run() error {
 	// Gracefully shutdown
 	go func() {
 		stop := make(chan os.Signal, 1)
-		signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
+		signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 		<-stop
 		log.Println("Shutting down server...")
 
 		// Save to file
 		filePath := config.AppConfig.FileStorage
-		if err := storage.Store.ShutdownSaveToFile(filePath); err != nil {
-			log.Printf("Failed to save store: %v", err)
-		} else {
-			log.Printf("Store saved to: %s", filePath)
+		if filePath != "" {
+			if err := storage.Store.ShutdownSaveToFile(filePath); err != nil {
+				log.Printf("Failed to save store: %v", err)
+			} else {
+				log.Printf("Store saved to: %s", filePath)
+			}
+		}
+
+		// Close PG connection
+		if instance != nil {
+			instance.CloseSQLInstance()
 		}
 
 		// Shutdown server
