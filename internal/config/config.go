@@ -38,6 +38,7 @@ type PostgresConfig struct {
 	DBTimeout    int
 }
 
+// boolEnvPtr парсит строку из окружения в *bool; возвращает nil, если распарсить нельзя.
 func boolEnvPtr(v string) *bool {
 	s := strings.TrimSpace(strings.ToLower(v))
 	switch s {
@@ -55,6 +56,7 @@ func boolEnvPtr(v string) *bool {
 	}
 }
 
+// pickBool выбирает итоговое булево значение по приоритету флаг > env > файл > дефолт.
 func pickBool(flag *boolFlag, envPtr *bool, filePtr *bool, def bool) bool {
 	switch {
 	case flag != nil && flag.set:
@@ -68,6 +70,7 @@ func pickBool(flag *boolFlag, envPtr *bool, filePtr *bool, def bool) bool {
 	}
 }
 
+// jsonConfig — структура для чтения настроек из JSON-файла конфигурации.
 type jsonConfig struct {
 	ServerAddress *string `json:"server_address"`
 	BaseURL       *string `json:"base_url"`
@@ -76,11 +79,13 @@ type jsonConfig struct {
 	EnableHTTPS   *bool   `json:"enable_https"`
 }
 
+// boolFlag — вспомогательный тип для булевых флагов с приоритетом "задан/не задан".
 type boolFlag struct {
 	set   bool
 	value bool
 }
 
+// Set устанавливает значение булевого флага и помечает его как явно заданный.
 func (b *boolFlag) Set(s string) error {
 	b.set = true
 	v, err := strconv.ParseBool(s)
@@ -91,12 +96,15 @@ func (b *boolFlag) Set(s string) error {
 	return nil
 }
 
+// String возвращает строковое представление текущего значения флага.
 func (b *boolFlag) String() string {
 	if b == nil {
 		return "false"
 	}
 	return strconv.FormatBool(b.value)
 }
+
+// IsBoolFlag отмечает флаг как булев, позволяя писать -s без значения.
 func (b *boolFlag) IsBoolFlag() bool { return true }
 
 // InitConfig инициализирует конфигурацию из флагов и переменных окружения.
