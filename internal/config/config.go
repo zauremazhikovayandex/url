@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"time"
 )
@@ -26,12 +27,18 @@ type Config struct {
 	JWTSecretKey   string
 	JWTTokenExp    time.Duration
 	JWTCookieName  string
+	EnableHTTPS    bool
 }
 
 // PostgresConfig описывает параметры подключения к PostgreSQL.
 type PostgresConfig struct {
 	DBConnection string
 	DBTimeout    int
+}
+
+func boolEnv(name string) bool {
+	v := strings.TrimSpace(strings.ToLower(os.Getenv(name)))
+	return v == "1" || v == "true" || v == "yes" || v == "on"
 }
 
 // InitConfig инициализирует конфигурацию из флагов и переменных окружения.
@@ -42,6 +49,7 @@ func InitConfig() {
 		baseURLFlag := flag.String("b", "", "base URL for short links")
 		fileStorageFlag := flag.String("f", "", "file storage")
 		dbConnectionFlag := flag.String("d", "", "postgres connection")
+		enableHTTPSFlag := flag.Bool("s", false, "enable HTTPS")
 		flag.Parse()
 
 		// значения по умолчанию
@@ -49,6 +57,7 @@ func InitConfig() {
 		baseURL := "http://localhost:8080"
 		fileStorage := ""
 		dbConnection := ""
+		enableHTTPS := false
 
 		// флаги (если переданы)
 		if *serverAddrFlag != "" {
@@ -63,6 +72,9 @@ func InitConfig() {
 		if *dbConnectionFlag != "" {
 			dbConnection = *dbConnectionFlag
 		}
+		if *enableHTTPSFlag {
+			enableHTTPS = true
+		}
 
 		// окружение
 		if env := os.Getenv("SERVER_ADDRESS"); env != "" {
@@ -76,6 +88,9 @@ func InitConfig() {
 		}
 		if env := os.Getenv("DATABASE_DSN"); env != "" {
 			dbConnection = env
+		}
+		if boolEnv("ENABLE_HTTPS") {
+			enableHTTPS = true
 		}
 
 		storageType := "Memory"
@@ -97,11 +112,17 @@ func InitConfig() {
 			JWTSecretKey:  "supersecretkey",
 			JWTTokenExp:   time.Hour * 3,
 			JWTCookieName: "auth_token",
+			EnableHTTPS:   enableHTTPS,
 		}
 
 		fmt.Println("Storage type:", storageType)
 		if storageType == "File" {
 			fmt.Println("💾 Using file storage path:", AppConfig.FileStorage)
+		}
+		if AppConfig.EnableHTTPS {
+			fmt.Println("🔐 HTTPS: enabled")
+		} else {
+			fmt.Println("🔓 HTTPS: disabled")
 		}
 	})
 }
