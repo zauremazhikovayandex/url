@@ -49,3 +49,9 @@ func (s *PostgresURLService) DeleteForUser(ctx context.Context, id string, userI
 func (s *PostgresURLService) BatchDelete(ctx context.Context, ids []string, userID string) error {
 	return postgres.BatchDeleteURLs(ctx, ids, userID)
 }
+
+// GetStats возвращает количество активных ссылок и пользователей.
+func (s *PostgresURLService) GetStats(ctx context.Context) (int, int, error) {
+	urls, users, err := postgres.CountStats(ctx)
+	return urls, users, err
+}

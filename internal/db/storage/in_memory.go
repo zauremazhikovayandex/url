@@ -100,3 +100,19 @@ func getDir(path string) string {
 	}
 	return "."
 }
+
+// MuRLock выполняет fn под RLock (удобная обёртка).
+func (s *Storage) MuRLock(fn func()) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	fn()
+}
+
+// Snapshot возвращает копию текущей мапы (для безопасного чтения размеров/итераций).
+func (s *Storage) Snapshot() map[string]string {
+	cp := make(map[string]string, len(s.data))
+	for k, v := range s.data {
+		cp[k] = v
+	}
+	return cp
+}
