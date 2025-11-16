@@ -15,7 +15,7 @@ var Store *Storage
 // Storage представляет потокобезопасное хранилище ключ→значение.
 type Storage struct {
 	data map[string]string
-	mu   sync.RWMutex
+	Mu   sync.RWMutex
 }
 
 // InitStorage инициализирует глобальное хранилище и загружает данные из файла (если указан путь).
@@ -30,15 +30,15 @@ func InitStorage() {
 
 // Set сохраняет значение по ключу.
 func (s *Storage) Set(key, value string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.Mu.Lock()
+	defer s.Mu.Unlock()
 	s.data[key] = value
 }
 
 // Get возвращает значение по ключу.
 func (s *Storage) Get(key string) (string, bool) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.Mu.RLock()
+	defer s.Mu.RUnlock()
 	val, ok := s.data[key]
 	return val, ok
 }
@@ -50,8 +50,8 @@ func (s *Storage) Delete(key string) {
 
 // ShutdownSaveToFile сохраняет данные хранилища в файл перед остановкой.
 func (s *Storage) ShutdownSaveToFile(filename string) error {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.Mu.RLock()
+	defer s.Mu.RUnlock()
 
 	if err := os.MkdirAll(getDir(filename), 0755); err != nil {
 		return err
@@ -85,13 +85,16 @@ func (s *Storage) LoadFromFile(filename string) error {
 		return err
 	}
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.Mu.Lock()
+	defer s.Mu.Unlock()
 	for k, v := range loaded {
 		s.data[k] = v
 	}
 	return nil
 }
+
+// DataUnsafe возвращает ссылку на внутреннюю map (только под локом!).
+func (s *Storage) DataUnsafe() map[string]string { return s.data }
 
 // getDir - Получение директории хранилища
 func getDir(path string) string {
@@ -103,8 +106,8 @@ func getDir(path string) string {
 
 // MuRLock выполняет fn под RLock (удобная обёртка).
 func (s *Storage) MuRLock(fn func()) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.Mu.RLock()
+	defer s.Mu.RUnlock()
 	fn()
 }
 

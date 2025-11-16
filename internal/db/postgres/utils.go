@@ -217,7 +217,6 @@ func CountStats(ctx context.Context) (int, int, error) {
 	defer cancel()
 
 	var urls, users int
-	// одной выборкой
 	row := db.QueryRow(timeoutCtx, `
 		SELECT 
 		  COUNT(*) FILTER (WHERE deleted = 0) AS urls,

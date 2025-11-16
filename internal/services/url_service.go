@@ -21,6 +21,4 @@ type URLService interface {
 	DeleteForUser(ctx context.Context, id string, userID string) error
 	// BatchDelete помечает на удаление набор ссылок пользователя.
 	BatchDelete(ctx context.Context, ids []string, userID string) error
-	// GetStats агрегированная статистика
-	GetStats(ctx context.Context) (urls int, users int, err error)
 }
