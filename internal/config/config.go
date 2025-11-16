@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"net"
 	"os"
 	"strconv"
 	"strings"
@@ -30,6 +31,8 @@ type Config struct {
 	JWTTokenExp    time.Duration
 	JWTCookieName  string
 	EnableHTTPS    bool
+	TrustedSubnet  string
+	TrustedIPNet   *net.IPNet
 }
 
 // PostgresConfig описывает параметры подключения к PostgreSQL.
@@ -77,6 +80,7 @@ type jsonConfig struct {
 	FileStorage   *string `json:"file_storage_path"`
 	DatabaseDSN   *string `json:"database_dsn"`
 	EnableHTTPS   *bool   `json:"enable_https"`
+	TrustedSubnet *string `json:"trusted_subnet"`
 }
 
 // boolFlag — вспомогательный тип для булевых флагов с приоритетом "задан/не задан".
@@ -114,6 +118,9 @@ func InitConfig() {
 		var cfgPath string
 		var httpsFlag boolFlag
 
+		trustedSubnetFlag := flag.String("t", "", "trusted subnet in CIDR (e.g. 10.0.0.0/8)")
+		flag.StringVar(trustedSubnetFlag, "trusted-subnet", "", "trusted subnet in CIDR (e.g. 10.0.0.0/8)")
+
 		serverAddrFlag := flag.String("a", "", "port to run server")
 		baseURLFlag := flag.String("b", "", "base URL for short links")
 		fileStorageFlag := flag.String("f", "", "file storage")
@@ -139,6 +146,7 @@ func InitConfig() {
 		if v, ok := os.LookupEnv("ENABLE_HTTPS"); ok {
 			envHTTPS = boolEnvPtr(v)
 		}
+		envTrustedSubnet := os.Getenv("TRUSTED_SUBNET")
 
 		// file
 		var fileCfg jsonConfig
@@ -171,6 +179,17 @@ func InitConfig() {
 		filePath := pickStr(*fileStorageFlag, envFilePath, fileCfg.FileStorage, "")
 		dbConn := pickStr(*dbConnFlag, envDB, fileCfg.DatabaseDSN, "")
 		enableTLS := pickBool(&httpsFlag, envHTTPS, fileCfg.EnableHTTPS, false)
+		trustedSubnet := pickStr(*trustedSubnetFlag, envTrustedSubnet, fileCfg.TrustedSubnet, "")
+
+		var ipNet *net.IPNet
+		if strings.TrimSpace(trustedSubnet) != "" {
+			_, parsedNet, err := net.ParseCIDR(trustedSubnet)
+			if err == nil {
+				ipNet = parsedNet
+			} else {
+				fmt.Println("config: invalid trusted_subnet CIDR:", err)
+			}
+		}
 
 		storageType := "Memory"
 		if dbConn != "" {
@@ -192,6 +211,8 @@ func InitConfig() {
 			JWTTokenExp:   time.Hour * 3,
 			JWTCookieName: "auth_token",
 			EnableHTTPS:   enableTLS,
+			TrustedSubnet: trustedSubnet,
+			TrustedIPNet:  ipNet,
 		}
 
 		fmt.Println("Storage type:", storageType)

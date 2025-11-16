@@ -28,6 +28,7 @@ func InitHandlers(urlService services.URLService) *chi.Mux {
 	r.Get("/api/user/urls", h.GetUserURLs)
 	r.Delete("/api/user/urls", h.DeleteUserURLs)
 	r.Get("/ping", h.GetDBPing)
+	r.Get("/api/internal/stats", h.GetInternalStats)
 
 	return r
 }
