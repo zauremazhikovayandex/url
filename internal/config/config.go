@@ -33,6 +33,8 @@ type Config struct {
 	EnableHTTPS    bool
 	TrustedSubnet  string
 	TrustedIPNet   *net.IPNet
+	GRPCAddr       string
+	EnableGRPC     bool
 }
 
 // PostgresConfig описывает параметры подключения к PostgreSQL.
@@ -73,6 +75,20 @@ func pickBool(flag *boolFlag, envPtr *bool, filePtr *bool, def bool) bool {
 	}
 }
 
+// сбор финальных значений по приоритету
+func pickStr(flagVal, envVal string, filePtr *string, def string) string {
+	switch {
+	case flagVal != "":
+		return flagVal
+	case envVal != "":
+		return envVal
+	case filePtr != nil && *filePtr != "":
+		return *filePtr
+	default:
+		return def
+	}
+}
+
 // jsonConfig — структура для чтения настроек из JSON-файла конфигурации.
 type jsonConfig struct {
 	ServerAddress *string `json:"server_address"`
@@ -81,6 +97,8 @@ type jsonConfig struct {
 	DatabaseDSN   *string `json:"database_dsn"`
 	EnableHTTPS   *bool   `json:"enable_https"`
 	TrustedSubnet *string `json:"trusted_subnet"`
+	GRPCAddress   *string `json:"grpc_address"`
+	EnableGRPC    *bool   `json:"enable_grpc"`
 }
 
 // boolFlag — вспомогательный тип для булевых флагов с приоритетом "задан/не задан".
@@ -117,6 +135,7 @@ func InitConfig() {
 		// флаги
 		var cfgPath string
 		var httpsFlag boolFlag
+		var grpcFlag boolFlag
 
 		trustedSubnetFlag := flag.String("t", "", "trusted subnet in CIDR (e.g. 10.0.0.0/8)")
 		flag.StringVar(trustedSubnetFlag, "trusted-subnet", "", "trusted subnet in CIDR (e.g. 10.0.0.0/8)")
@@ -125,12 +144,17 @@ func InitConfig() {
 		baseURLFlag := flag.String("b", "", "base URL for short links")
 		fileStorageFlag := flag.String("f", "", "file storage")
 		dbConnFlag := flag.String("d", "", "postgres connection")
+		grpcAddrFlag := flag.String("g", "", "grpc address (e.g. :3201)")
 
 		// алиасы
 		flag.StringVar(&cfgPath, "c", "", "path to config file (JSON)")
 		flag.StringVar(&cfgPath, "config", "", "path to config file (JSON)")
 		flag.Var(&httpsFlag, "s", "enable HTTPS (bool)")
 		flag.Var(&httpsFlag, "https", "enable HTTPS (bool)")
+
+		flag.StringVar(grpcAddrFlag, "grpc-address", "", "grpc address (e.g. :3201)")
+		flag.Var(&grpcFlag, "G", "enable gRPC (bool)")
+		flag.Var(&grpcFlag, "enable-grpc", "enable gRPC (bool)")
 
 		flag.Parse()
 
@@ -148,6 +172,12 @@ func InitConfig() {
 		}
 		envTrustedSubnet := os.Getenv("TRUSTED_SUBNET")
 
+		envGRPCAddr := os.Getenv("GRPC_ADDRESS")
+		var envEnableGRPC *bool
+		if v, ok := os.LookupEnv("ENABLE_GRPC"); ok {
+			envEnableGRPC = boolEnvPtr(v)
+		}
+
 		// file
 		var fileCfg jsonConfig
 		if cfgPath != "" {
@@ -157,21 +187,8 @@ func InitConfig() {
 				fmt.Println("config: cannot read file:", err)
 			}
 		}
-
-		// сбор финальных значений по приоритету
-		// helpers
-		pickStr := func(flagVal, envVal string, filePtr *string, def string) string {
-			switch {
-			case flagVal != "":
-				return flagVal
-			case envVal != "":
-				return envVal
-			case filePtr != nil && *filePtr != "":
-				return *filePtr
-			default:
-				return def
-			}
-		}
+		grpcAddr := pickStr(*grpcAddrFlag, envGRPCAddr, fileCfg.GRPCAddress, ":3201")
+		enableGRPC := pickBool(&grpcFlag, envEnableGRPC, fileCfg.EnableGRPC, true)
 
 		// defaults
 		serverAddr := pickStr(*serverAddrFlag, envServerAddr, fileCfg.ServerAddress, ":8080")
@@ -213,6 +230,8 @@ func InitConfig() {
 			EnableHTTPS:   enableTLS,
 			TrustedSubnet: trustedSubnet,
 			TrustedIPNet:  ipNet,
+			GRPCAddr:      grpcAddr,
+			EnableGRPC:    enableGRPC,
 		}
 
 		fmt.Println("Storage type:", storageType)

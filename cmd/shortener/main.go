@@ -14,6 +14,7 @@ import (
 	"github.com/zauremazhikovayandex/url/internal/config"
 	"github.com/zauremazhikovayandex/url/internal/db/postgres"
 	"github.com/zauremazhikovayandex/url/internal/db/storage"
+	grpcserver "github.com/zauremazhikovayandex/url/internal/grpc"
 	"github.com/zauremazhikovayandex/url/internal/logger"
 	"github.com/zauremazhikovayandex/url/internal/services"
 	"log"
@@ -129,6 +130,31 @@ func run() error {
 	srv := &http.Server{
 		Addr:    addr,
 		Handler: app.InitHandlers(urlService),
+	}
+
+	// gRPC: стартуем параллельно, если включено
+	if config.AppConfig.EnableGRPC {
+		go func() {
+			grpcAddr := config.AppConfig.GRPCAddr
+			ln, err := net.Listen("tcp", grpcAddr)
+			if err != nil {
+				log.Printf("gRPC listen error: %v", err)
+				return
+			}
+			var tlsCfg *tls.Config
+			if config.AppConfig.EnableHTTPS {
+				tcfg, err := makeSelfSignedTLSConfig()
+				if err != nil {
+					log.Printf("gRPC TLS config error: %v", err)
+				} else {
+					tlsCfg = tcfg
+				}
+			}
+			log.Printf("gRPC on %s (tls=%v)", grpcAddr, tlsCfg != nil)
+			if err := grpcserver.Serve(urlService, ln, tlsCfg != nil, tlsCfg); err != nil {
+				log.Printf("gRPC serve error: %v", err)
+			}
+		}()
 	}
 
 	// Gracefully shutdown
