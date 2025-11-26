@@ -123,16 +123,25 @@ func run() error {
 	//Init Logger
 	logger.New("info")
 
+	// Собираем сервисный слой
+	urlRepo := &services.PostgresURLService{}
+	shortenerSvc := services.NewShortener(
+		urlRepo,
+		config.AppConfig.BaseURL,
+		config.AppConfig.StorageType,
+		storage.Store,
+		config.AppConfig.TrustedIPNet,
+	)
+
 	// Create server
 	addr := config.AppConfig.ServerAddr
 	fmt.Println("Running server on", addr)
-	urlService := &services.PostgresURLService{}
 	srv := &http.Server{
 		Addr:    addr,
-		Handler: app.InitHandlers(urlService),
+		Handler: app.InitHandlers(shortenerSvc),
 	}
 
-	// gRPC: стартуем параллельно, если включено
+	// gRPC
 	if config.AppConfig.EnableGRPC {
 		go func() {
 			grpcAddr := config.AppConfig.GRPCAddr
@@ -151,7 +160,7 @@ func run() error {
 				}
 			}
 			log.Printf("gRPC on %s (tls=%v)", grpcAddr, tlsCfg != nil)
-			if err := grpcserver.Serve(urlService, ln, tlsCfg != nil, tlsCfg); err != nil {
+			if err := grpcserver.Serve(shortenerSvc, ln, tlsCfg != nil, tlsCfg); err != nil {
 				log.Printf("gRPC serve error: %v", err)
 			}
 		}()

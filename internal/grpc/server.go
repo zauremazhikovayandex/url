@@ -2,20 +2,14 @@ package grpcserver
 
 import (
 	"context"
-	"crypto/rand"
 	"crypto/tls"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"net"
-	"net/url"
 	"strings"
 	"time"
 
 	"github.com/zauremazhikovayandex/url/internal/auth"
-	"github.com/zauremazhikovayandex/url/internal/config"
-	"github.com/zauremazhikovayandex/url/internal/db/postgres"
-	"github.com/zauremazhikovayandex/url/internal/db/storage"
 	"github.com/zauremazhikovayandex/url/internal/grpc/pb"
 	"github.com/zauremazhikovayandex/url/internal/logger"
 	"github.com/zauremazhikovayandex/url/internal/logger/message"
@@ -31,30 +25,17 @@ import (
 
 type Server struct {
 	pb.UnimplementedShortenerServer
-	urlService services.URLService
+	svc services.Shortener
 }
 
-func New(urlSvc services.URLService) *Server {
-	return &Server{urlService: urlSvc}
-}
-
-// --- helpers ---
-
-// isValidURL - Проверка на корректный URL
-func isValidURL(rawURL string) bool {
-	parsed, err := url.ParseRequestURI(rawURL)
-	if err != nil {
-		return false
-	}
-	return parsed.Scheme == "http" || parsed.Scheme == "https"
+func New(svc services.Shortener) *Server {
+	return &Server{svc: svc}
 }
 
 func userIDFromContext(ctx context.Context) string {
-	// Пытаемся взять из HTTP-совместимого контекста
 	if uid := auth.GetUserID(ctx); uid != "" {
 		return uid
 	}
-	// Или из gRPC метаданных (authorization / x-user-id)
 	if md, ok := metadata.FromIncomingContext(ctx); ok {
 		if v := md.Get("x-user-id"); len(v) > 0 && v[0] != "" {
 			return v[0]
@@ -63,80 +44,51 @@ func userIDFromContext(ctx context.Context) string {
 	return "grpc-anonymous"
 }
 
-// generateShortID - Генерация ID
-func generateShortID(n int) (string, error) {
-	b := make([]byte, n)
-	_, err := rand.Read(b)
-	if err != nil {
-		return "", err
-	}
-	return base64.URLEncoding.EncodeToString(b)[:n], nil
-}
-
-// --- RPC methods ---
+// ---- RPC methods ----
 
 func (s *Server) Shorten(ctx context.Context, req *pb.ShortenRequest) (*pb.ShortenResponse, error) {
 	if req == nil || strings.TrimSpace(req.Url) == "" {
 		return nil, status.Error(codes.InvalidArgument, "empty url")
 	}
-	if !isValidURL(req.Url) {
-		return nil, status.Error(codes.InvalidArgument, "invalid url")
-	}
 
 	userID := userIDFromContext(ctx)
-	id, err := generateShortID(8)
+	shortURL, conflict, err := s.svc.CreateShortURL(ctx, req.Url, userID)
 	if err != nil {
-		return nil, status.Error(codes.Internal, "failed to generate id")
-	}
-
-	st := config.AppConfig.StorageType
-	if st == "DB" {
-		if err := s.urlService.SaveURL(ctx, id, req.Url, userID); err != nil {
-			if errors.Is(err, postgres.ErrDuplicateOriginalURL) {
-				// найти существующий id
-				existID, getErr := s.urlService.GetShortIDByOriginalURL(ctx, req.Url)
-				if getErr != nil || existID == "" {
-					return &pb.ShortenResponse{ShortUrl: "", Conflict: true}, nil
-				}
-				shortURL := fmt.Sprintf("%s/%s", config.AppConfig.BaseURL, existID)
-				return &pb.ShortenResponse{ShortUrl: shortURL, Conflict: true}, nil
-			}
+		switch {
+		case errors.Is(err, services.ErrInvalidURL):
+			return nil, status.Error(codes.InvalidArgument, "invalid url")
+		default:
 			return nil, status.Error(codes.Internal, "storage error")
 		}
-	} else {
-		storage.Store.Set(id, req.Url)
 	}
 
 	return &pb.ShortenResponse{
-		ShortUrl: fmt.Sprintf("%s/%s", config.AppConfig.BaseURL, id),
-		Conflict: false,
+		ShortUrl: shortURL,
+		Conflict: conflict,
 	}, nil
 }
 
 func (s *Server) ShortenBatch(ctx context.Context, req *pb.BatchShortenRequest) (*pb.BatchShortenResponse, error) {
 	userID := userIDFromContext(ctx)
-	st := config.AppConfig.StorageType
 
-	var out []*pb.BatchResult
+	items := make([]services.BatchItem, 0, len(req.Items))
 	for _, it := range req.Items {
-		url := strings.TrimSpace(it.OriginalUrl)
-		if url == "" || !isValidURL(url) {
-			continue
-		}
-		id, err := generateShortID(8)
-		if err != nil {
-			continue
-		}
-		if st == "DB" {
-			if err := s.urlService.SaveURL(ctx, id, url, userID); err != nil {
-				continue
-			}
-		} else {
-			storage.Store.Set(id, url)
-		}
+		items = append(items, services.BatchItem{
+			CorrelationID: it.CorrelationId,
+			OriginalURL:   strings.TrimSpace(it.OriginalUrl),
+		})
+	}
+
+	results, err := s.svc.CreateShortURLBatch(ctx, items, userID)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "storage error")
+	}
+
+	out := make([]*pb.BatchResult, 0, len(results))
+	for _, res := range results {
 		out = append(out, &pb.BatchResult{
-			CorrelationId: it.CorrelationId,
-			ShortUrl:      fmt.Sprintf("%s/%s", config.AppConfig.BaseURL, id),
+			CorrelationId: res.CorrelationID,
+			ShortUrl:      res.ShortURL,
 		})
 	}
 	return &pb.BatchShortenResponse{Results: out}, nil
@@ -146,37 +98,27 @@ func (s *Server) Get(ctx context.Context, req *pb.GetRequest) (*pb.GetResponse, 
 	if req == nil || strings.TrimSpace(req.Id) == "" {
 		return nil, status.Error(codes.InvalidArgument, "missing id")
 	}
-	st := config.AppConfig.StorageType
-	if st == "DB" {
-		orig, err := s.urlService.GetOriginalURL(ctx, req.Id)
-		if err != nil {
-			if errors.Is(err, postgres.ErrURLDeleted) {
-				return &pb.GetResponse{OriginalUrl: "", Deleted: true}, nil
-			}
+
+	orig, deleted, err := s.svc.Resolve(ctx, req.Id)
+	if err != nil {
+		if errors.Is(err, services.ErrNotFound) {
 			return nil, status.Error(codes.NotFound, "url not found")
 		}
-		return &pb.GetResponse{OriginalUrl: orig, Deleted: false}, nil
+		return nil, status.Error(codes.Internal, "server error")
 	}
-	// memory/file
-	if orig, ok := storage.Store.Get(req.Id); ok && orig != "" {
-		return &pb.GetResponse{OriginalUrl: orig, Deleted: false}, nil
-	}
-	return nil, status.Error(codes.NotFound, "url not found")
+	return &pb.GetResponse{OriginalUrl: orig, Deleted: deleted}, nil
 }
 
 func (s *Server) UserURLs(ctx context.Context, _ *pb.UserURLsRequest) (*pb.UserURLsResponse, error) {
 	userID := userIDFromContext(ctx)
-	urls, err := s.urlService.GetURLsByUserID(ctx, userID)
+	urls, err := s.svc.UserURLs(ctx, userID)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "db error")
-	}
-	if len(urls) == 0 {
-		return &pb.UserURLsResponse{Urls: nil}, nil
 	}
 	out := make([]*pb.URLPair, 0, len(urls))
 	for _, u := range urls {
 		out = append(out, &pb.URLPair{
-			ShortUrl:    config.AppConfig.BaseURL + "/" + u.ID,
+			ShortUrl:    u.ShortURL,
 			OriginalUrl: u.OriginalURL,
 		})
 	}
@@ -188,25 +130,20 @@ func (s *Server) DeleteUserURLs(ctx context.Context, req *pb.DeleteUserURLsReque
 	if len(req.Ids) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "empty ids")
 	}
-	if err := s.urlService.BatchDelete(ctx, req.Ids, userID); err != nil {
+	if err := s.svc.DeleteUserURLs(ctx, req.Ids, userID); err != nil {
 		return nil, status.Error(codes.Internal, "delete failed")
 	}
 	return &pb.DeleteUserURLsResponse{}, nil
 }
 
 func (s *Server) Ping(ctx context.Context, _ *pb.PingRequest) (*pb.PingResponse, error) {
-	conn, err := postgres.SQLInstance()
-	if conn == nil || err != nil {
+	if err := s.svc.PingDB(ctx); err != nil {
 		return nil, status.Error(codes.Unavailable, "db unavailable")
 	}
 	return &pb.PingResponse{}, nil
 }
 
 func (s *Server) Stats(ctx context.Context, _ *pb.StatsRequest) (*pb.StatsResponse, error) {
-	// Аналог /api/internal/stats: проверка trusted_subnet по X-Real-IP из metadata
-	if config.AppConfig.TrustedIPNet == nil {
-		return nil, status.Error(codes.PermissionDenied, "forbidden")
-	}
 	var ipStr string
 	if md, ok := metadata.FromIncomingContext(ctx); ok {
 		vals := md.Get("x-real-ip")
@@ -215,25 +152,15 @@ func (s *Server) Stats(ctx context.Context, _ *pb.StatsRequest) (*pb.StatsRespon
 		}
 	}
 	ip := net.ParseIP(ipStr)
-	if ipStr == "" || ip == nil || !config.AppConfig.TrustedIPNet.Contains(ip) {
-		return nil, status.Error(codes.PermissionDenied, "forbidden")
-	}
 
-	if config.AppConfig.StorageType == "DB" {
-		u, us, err := postgres.CountStats(ctx)
-		if err != nil {
-			return nil, status.Error(codes.Internal, "server error")
+	urls, users, err := s.svc.Stats(ctx, ip)
+	if err != nil {
+		if errors.Is(err, services.ErrForbidden) {
+			return nil, status.Error(codes.PermissionDenied, "forbidden")
 		}
-		return &pb.StatsResponse{Urls: int32(u), Users: int32(us)}, nil
-	}
-
-	if storage.Store == nil {
 		return nil, status.Error(codes.Internal, "server error")
 	}
-	storage.Store.Mu.RLock()
-	n := len(storage.Store.DataUnsafe())
-	storage.Store.Mu.RUnlock()
-	return &pb.StatsResponse{Urls: int32(n), Users: 0}, nil
+	return &pb.StatsResponse{Urls: int32(urls), Users: int32(users)}, nil
 }
 
 func unaryInterceptor(
@@ -253,7 +180,7 @@ func unaryInterceptor(
 }
 
 // Launcher
-func Serve(urlSvc services.URLService, ln net.Listener, useTLS bool, tlsCfg *tls.Config) error {
+func Serve(svc services.Shortener, ln net.Listener, useTLS bool, tlsCfg *tls.Config) error {
 	var s *grpc.Server
 	if useTLS {
 		creds := credentials.NewTLS(tlsCfg)
@@ -261,6 +188,6 @@ func Serve(urlSvc services.URLService, ln net.Listener, useTLS bool, tlsCfg *tls
 	} else {
 		s = grpc.NewServer(grpc.Creds(insecure.NewCredentials()), grpc.UnaryInterceptor(unaryInterceptor))
 	}
-	pb.RegisterShortenerServer(s, New(urlSvc))
+	pb.RegisterShortenerServer(s, New(svc))
 	return s.Serve(ln)
 }

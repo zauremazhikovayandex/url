@@ -4,24 +4,54 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
 	"github.com/go-resty/resty/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"github.com/zauremazhikovayandex/url/internal/app"
 	"github.com/zauremazhikovayandex/url/internal/config"
 	"github.com/zauremazhikovayandex/url/internal/db/storage"
 	"github.com/zauremazhikovayandex/url/internal/logger"
 	"github.com/zauremazhikovayandex/url/internal/services"
-	"net/http"
-	"net/http/httptest"
-	"strings"
-	"testing"
 )
 
+// helper для поднятия тестового сервера с новым фасадом Shortener.
+func newTestServer(t *testing.T) *httptest.Server {
+	t.Helper()
+
+	// Инициализация конфигурации, логгера и in-memory стораджа
+	config.InitConfig()
+	logger.New("info")
+	storage.InitStorage()
+
+	// Репозиторий для БД
+	urlRepo := &services.PostgresURLService{}
+
+	// Фасадный сервис, который будет использоваться и HTTP-слоем, и (в реальном коде) gRPC
+	shortenerSvc := services.NewShortener(
+		urlRepo,
+		config.AppConfig.BaseURL,
+		config.AppConfig.StorageType,
+		storage.Store,
+		config.AppConfig.TrustedIPNet,
+	)
+
+	// HTTP-сервер с хендлерами, завязанными на Shortener
+	return httptest.NewServer(app.InitHandlers(shortenerSvc))
+}
+
 func TestWebhook(t *testing.T) {
+	// Запускаем тестовый сервер
+	srv := newTestServer(t)
+	bURL := srv.URL
+	defer srv.Close()
 
 	// Тест для String body
-
 	testCases := []struct {
 		method       string
 		body         string
@@ -39,14 +69,6 @@ func TestWebhook(t *testing.T) {
 			expectedCode: http.StatusCreated,
 		},
 	}
-	config.InitConfig()
-	logger.New("info")
-	storage.InitStorage()
-
-	urlService := &services.PostgresURLService{}
-	srv := httptest.NewServer(app.InitHandlers(urlService))
-	bURL := srv.URL
-	defer srv.Close()
 
 	shortIDToOriginal := make(map[string]string)
 
@@ -61,6 +83,7 @@ func TestWebhook(t *testing.T) {
 		assert.Equal(t, tc.expectedCode, resp.StatusCode(), "Response code didn't match expected")
 
 		shortURL := strings.TrimSpace(string(resp.Body()))
+		// Базовый URL берётся из config.AppConfig.BaseURL (по умолчанию http://localhost:8080)
 		assert.True(t, strings.HasPrefix(shortURL, "http://localhost:8080/"))
 
 		id := strings.TrimPrefix(shortURL, "http://localhost:8080/")
@@ -68,7 +91,6 @@ func TestWebhook(t *testing.T) {
 	}
 
 	// Тест для JSON body
-
 	jsonCases := []struct {
 		jsonBody     map[string]string
 		expectedCode int
@@ -104,8 +126,8 @@ func TestWebhook(t *testing.T) {
 		shortIDToOriginal[id] = tc.jsonBody["url"]
 	}
 
-	// Тест Get запрос
-
+	// Тест Get запросов: resty по умолчанию следует редиректам,
+	// поэтому ожидаем конечный 200 OK.
 	for id := range shortIDToOriginal {
 		req := resty.New().R().
 			SetHeader("Content-Type", "text/plain")
@@ -114,13 +136,11 @@ func TestWebhook(t *testing.T) {
 		assert.NoError(t, err, "error making HTTP request")
 		assert.Equal(t, http.StatusOK, resp.StatusCode(), "Response code didn't match expected")
 	}
-
 }
 
 func TestGzipCompression(t *testing.T) {
-	// Запускаем сервер с middleware
-	urlService := &services.PostgresURLService{}
-	srv := httptest.NewServer(app.InitHandlers(urlService))
+	// Поднимаем сервер с новым фасадом и gzip middleware
+	srv := newTestServer(t)
 	defer srv.Close()
 
 	type RequestPayload struct {
