@@ -147,21 +147,19 @@ func run() error {
 			grpcAddr := config.AppConfig.GRPCAddr
 			ln, err := net.Listen("tcp", grpcAddr)
 			if err != nil {
-				log.Printf("gRPC listen error: %v", err)
-				return
+				log.Fatalf("gRPC listen error: %v", err)
 			}
 			var tlsCfg *tls.Config
 			if config.AppConfig.EnableHTTPS {
 				tcfg, err := makeSelfSignedTLSConfig()
 				if err != nil {
-					log.Printf("gRPC TLS config error: %v", err)
-				} else {
-					tlsCfg = tcfg
+					log.Fatalf("gRPC TLS config error: %v", err)
 				}
+				tlsCfg = tcfg
 			}
 			log.Printf("gRPC on %s (tls=%v)", grpcAddr, tlsCfg != nil)
 			if err := grpcserver.Serve(shortenerSvc, ln, tlsCfg != nil, tlsCfg); err != nil {
-				log.Printf("gRPC serve error: %v", err)
+				log.Fatalf("gRPC serve error: %v", err)
 			}
 		}()
 	}
