@@ -204,3 +204,26 @@ func BatchDeleteURLs(ctx context.Context, ids []string, userID string) error {
 	_, err = db.Exec(ctxWithTimeout, query, args...)
 	return err
 }
+
+// CountStats возвращает количество активных URL и количество пользователей.
+func CountStats(ctx context.Context) (int, int, error) {
+	instance, err := SQLInstance()
+	if err != nil {
+		return 0, 0, err
+	}
+	db := instance.PgSQL
+
+	timeoutCtx, cancel := context.WithTimeout(ctx, instance.Timeout)
+	defer cancel()
+
+	var urls, users int
+	row := db.QueryRow(timeoutCtx, `
+		SELECT 
+		  COUNT(*) FILTER (WHERE deleted = 0) AS urls,
+		  COUNT(DISTINCT CASE WHEN deleted = 0 THEN userID END) AS users
+		FROM urls`)
+	if err := row.Scan(&urls, &users); err != nil {
+		return 0, 0, err
+	}
+	return urls, users, nil
+}

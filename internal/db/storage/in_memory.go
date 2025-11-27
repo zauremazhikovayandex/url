@@ -1,21 +1,22 @@
-// Package storage предоставляет простое in-memory и файловое хранилище ссылок.
 package storage
 
 import (
 	"encoding/json"
-	"github.com/zauremazhikovayandex/url/internal/config"
 	"log"
 	"os"
 	"sync"
+
+	"github.com/zauremazhikovayandex/url/internal/config"
 )
 
 // Store — глобальное in-memory хранилище, инициализируемое при старте.
 var Store *Storage
 
-// Storage представляет потокобезопасное хранилище ключ→значение.
+// Storage — потокобезопасное хранилище ключ→значение.
+// Внутренние поле и мапа не экспортируются.
 type Storage struct {
-	data map[string]string
 	mu   sync.RWMutex
+	data map[string]string
 }
 
 // InitStorage инициализирует глобальное хранилище и загружает данные из файла (если указан путь).
@@ -45,7 +46,16 @@ func (s *Storage) Get(key string) (string, bool) {
 
 // Delete удаляет значение по ключу.
 func (s *Storage) Delete(key string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	delete(s.data, key)
+}
+
+// Len возвращает количество элементов в хранилище.
+func (s *Storage) Len() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return len(s.data)
 }
 
 // ShutdownSaveToFile сохраняет данные хранилища в файл перед остановкой.

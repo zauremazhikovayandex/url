@@ -14,6 +14,7 @@ import (
 	"github.com/zauremazhikovayandex/url/internal/config"
 	"github.com/zauremazhikovayandex/url/internal/db/postgres"
 	"github.com/zauremazhikovayandex/url/internal/db/storage"
+	grpcserver "github.com/zauremazhikovayandex/url/internal/grpc"
 	"github.com/zauremazhikovayandex/url/internal/logger"
 	"github.com/zauremazhikovayandex/url/internal/services"
 	"log"
@@ -122,13 +123,45 @@ func run() error {
 	//Init Logger
 	logger.New("info")
 
+	// Собираем сервисный слой
+	urlRepo := &services.PostgresURLService{}
+	shortenerSvc := services.NewShortener(
+		urlRepo,
+		config.AppConfig.BaseURL,
+		config.AppConfig.StorageType,
+		storage.Store,
+		config.AppConfig.TrustedIPNet,
+	)
+
 	// Create server
 	addr := config.AppConfig.ServerAddr
 	fmt.Println("Running server on", addr)
-	urlService := &services.PostgresURLService{}
 	srv := &http.Server{
 		Addr:    addr,
-		Handler: app.InitHandlers(urlService),
+		Handler: app.InitHandlers(shortenerSvc),
+	}
+
+	// gRPC
+	if config.AppConfig.EnableGRPC {
+		go func() {
+			grpcAddr := config.AppConfig.GRPCAddr
+			ln, err := net.Listen("tcp", grpcAddr)
+			if err != nil {
+				log.Fatalf("gRPC listen error: %v", err)
+			}
+			var tlsCfg *tls.Config
+			if config.AppConfig.EnableHTTPS {
+				tcfg, err := makeSelfSignedTLSConfig()
+				if err != nil {
+					log.Fatalf("gRPC TLS config error: %v", err)
+				}
+				tlsCfg = tcfg
+			}
+			log.Printf("gRPC on %s (tls=%v)", grpcAddr, tlsCfg != nil)
+			if err := grpcserver.Serve(shortenerSvc, ln, tlsCfg != nil, tlsCfg); err != nil {
+				log.Fatalf("gRPC serve error: %v", err)
+			}
+		}()
 	}
 
 	// Gracefully shutdown

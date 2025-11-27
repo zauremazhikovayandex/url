@@ -1,4 +1,3 @@
-// Package app содержит HTTP-обработчики и вспомогательные элементы веб-приложения.
 package app
 
 import (
@@ -10,12 +9,12 @@ import (
 
 // Handler - структура сервиса
 type Handler struct {
-	urlService services.URLService
+	shortener services.Shortener
 }
 
-// InitHandlers Инициализация хендлеров
-func InitHandlers(urlService services.URLService) *chi.Mux {
-	h := &Handler{urlService: urlService}
+// InitHandlers - Инициализация хендлеров
+func InitHandlers(shortener services.Shortener) *chi.Mux {
+	h := &Handler{shortener: shortener}
 	r := chi.NewRouter()
 	r.Use(auth.Middleware)
 	r.Use(h.GzipMiddleware)
@@ -28,6 +27,7 @@ func InitHandlers(urlService services.URLService) *chi.Mux {
 	r.Get("/api/user/urls", h.GetUserURLs)
 	r.Delete("/api/user/urls", h.DeleteUserURLs)
 	r.Get("/ping", h.GetDBPing)
+	r.Get("/api/internal/stats", h.GetInternalStats)
 
 	return r
 }

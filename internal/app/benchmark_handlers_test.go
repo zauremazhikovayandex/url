@@ -5,34 +5,53 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/zauremazhikovayandex/url/internal/config"
-	"github.com/zauremazhikovayandex/url/internal/db/postgres"
 	"github.com/zauremazhikovayandex/url/internal/logger"
 	"github.com/zauremazhikovayandex/url/internal/services"
 )
 
-// ---- мок URLService, чтобы не ходить в БД ----
-type noopService struct{}
+type noopShortener struct{}
 
-var _ services.URLService = (*noopService)(nil)
+var _ services.Shortener = (*noopShortener)(nil)
 
-func (noopService) GetOriginalURL(context.Context, string) (string, error)          { return "", nil }
-func (noopService) GetURLsByUserID(context.Context, string) ([]postgres.URL, error) { return nil, nil }
-func (noopService) GetShortIDByOriginalURL(context.Context, string) (string, error) { return "", nil }
-func (noopService) SaveURL(context.Context, string, string, string) error           { return nil }
-func (noopService) DeleteForUser(context.Context, string, string) error             { return nil }
-func (noopService) BatchDelete(context.Context, []string, string) error             { return nil }
+func (noopShortener) CreateShortURL(ctx context.Context, originalURL, userID string) (string, bool, error) {
+	return "", false, nil
+}
+
+func (noopShortener) CreateShortURLBatch(ctx context.Context, items []services.BatchItem, userID string) ([]services.BatchResult, error) {
+	return nil, nil
+}
+
+func (noopShortener) Resolve(ctx context.Context, id string) (string, bool, error) {
+	return "", false, nil
+}
+
+func (noopShortener) UserURLs(ctx context.Context, userID string) ([]services.URLPair, error) {
+	return nil, nil
+}
+
+func (noopShortener) DeleteUserURLs(ctx context.Context, ids []string, userID string) error {
+	return nil
+}
+
+func (noopShortener) PingDB(ctx context.Context) error {
+	return nil
+}
+
+func (noopShortener) Stats(ctx context.Context, clientIP net.IP) (int, int, error) {
+	return 0, 0, nil
+}
 
 func BenchmarkPostShortenJSON(b *testing.B) {
 	config.InitConfig()
 	logger.New("info")
-	config.AppConfig.StorageType = "DB"
 
-	srv := httptest.NewServer(InitHandlers(noopService{}))
+	srv := httptest.NewServer(InitHandlers(noopShortener{}))
 	defer srv.Close()
 
 	type req struct {

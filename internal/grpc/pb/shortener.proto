@@ -1,0 +1,73 @@
+syntax = "proto3";
+
+package shortener;
+option go_package = "github.com/zauremazhikovayandex/url/internal/grpc/pb;pb";
+
+message ShortenRequest {
+  string url = 1;
+}
+
+message ShortenResponse {
+  string short_url = 1;
+  bool conflict = 2; // true, если уже был такой URL (HTTP 409 аналог)
+}
+
+message BatchItem {
+  string correlation_id = 1;
+  string original_url   = 2;
+}
+
+message BatchShortenRequest {
+  repeated BatchItem items = 1;
+}
+
+message BatchResult {
+  string correlation_id = 1;
+  string short_url      = 2;
+}
+
+message BatchShortenResponse {
+  repeated BatchResult results = 1;
+}
+
+message GetRequest {
+  string id = 1;
+}
+
+message GetResponse {
+  string original_url = 1;
+  bool deleted        = 2; // аналог 410 Gone
+}
+
+message UserURLsRequest {}
+message URLPair {
+  string short_url    = 1;
+  string original_url = 2;
+}
+message UserURLsResponse {
+  repeated URLPair urls = 1;
+}
+
+message DeleteUserURLsRequest {
+  repeated string ids = 1;
+}
+message DeleteUserURLsResponse {}
+
+message PingRequest {}
+message PingResponse {}
+
+message StatsRequest {}
+message StatsResponse {
+  int32 urls  = 1;
+  int32 users = 2;
+}
+
+service Shortener {
+  rpc Shorten(ShortenRequest) returns (ShortenResponse);
+  rpc ShortenBatch(BatchShortenRequest) returns (BatchShortenResponse);
+  rpc Get(GetRequest) returns (GetResponse);
+  rpc UserURLs(UserURLsRequest) returns (UserURLsResponse);
+  rpc DeleteUserURLs(DeleteUserURLsRequest) returns (DeleteUserURLsResponse);
+  rpc Ping(PingRequest) returns (PingResponse);
+  rpc Stats(StatsRequest) returns (StatsResponse);
+}
